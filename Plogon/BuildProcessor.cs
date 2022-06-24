@@ -38,7 +38,7 @@ public class BuildProcessor
         this.manifestStorage = new ManifestStorage(manifestFolder);
         this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"));
 
-        this.dockerClient = new DockerClientConfiguration(new Uri("npipe://./pipe/docker_engine")).CreateClient();
+        this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
 
     public async Task SetupDockerImage()
