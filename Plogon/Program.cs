@@ -12,18 +12,21 @@ class Program
     /// <param name="outputFolder">The folder used for storing output and state.</param>
     /// <param name="manifestFolder">The folder used for storing plugin manifests.</param>
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
-    static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder)
+    /// <param name="staticFolder">The 'static' folder that holds script files.</param>
+    static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
+        DirectoryInfo staticFolder)
     {
         SetupLogging();
 
-        var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder);
+        var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder);
         var tasks = buildProcessor.GetTasks();
 
         await buildProcessor.SetupDockerImage();
-        
+
         foreach (var task in tasks)
         {
-            Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName, task.Manifest.Plugin.Commit, task.HaveCommit ?? "nothing");
+            Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName, task.Manifest.Plugin.Commit,
+                task.HaveCommit ?? "nothing");
             var status = await buildProcessor.ProcessTask(task);
 
             if (!status)

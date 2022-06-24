@@ -18,9 +18,11 @@ public class BuildProcessor
     private readonly DirectoryInfo repoFolder;
     private readonly DirectoryInfo manifestFolder;
     private readonly DirectoryInfo workFolder;
+    private readonly DirectoryInfo staticFolder;
+
 
     private readonly DockerClient dockerClient;
-    
+
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
     private DalamudReleases dalamudReleases;
@@ -28,11 +30,13 @@ public class BuildProcessor
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
 
-    public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder)
+    public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
+        DirectoryInfo staticFolder)
     {
         this.repoFolder = repoFolder;
         this.manifestFolder = manifestFolder;
         this.workFolder = workFolder;
+        this.staticFolder = staticFolder;
 
         this.pluginRepository = new PluginRepository(repoFolder);
         this.manifestStorage = new ManifestStorage(manifestFolder);
@@ -44,26 +48,27 @@ public class BuildProcessor
     public async Task SetupDockerImage()
     {
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
-        {
-            //FromImage = "fedora/memcached",
-            FromImage = DOCKER_IMAGE,
-            //FromSrc = DOCKER_REPO,
-            Tag = DOCKER_TAG,
-        }, null, new Progress<JSONMessage>(progress =>
-        {
-            Log.Verbose("Docker image pull ({Id}): {Status}", progress.ID, progress.Status);
-        }));
+            {
+                //FromImage = "fedora/memcached",
+                FromImage = DOCKER_IMAGE,
+                //FromSrc = DOCKER_REPO,
+                Tag = DOCKER_TAG,
+            }, null,
+            new Progress<JSONMessage>(progress =>
+            {
+                Log.Verbose("Docker image pull ({Id}): {Status}", progress.ID, progress.Status);
+            }));
 
         var images = await this.dockerClient.Images.ListImagesAsync(new ImagesListParameters
         {
             All = true,
         });
     }
-    
+
     public ISet<BuildTask> GetTasks()
     {
         var tasks = new HashSet<BuildTask>();
-        
+
         foreach (var channel in this.manifestStorage.Channels)
         {
             foreach (var manifest in channel.Value)
@@ -97,7 +102,7 @@ public class BuildProcessor
             //work.Delete(true);
             //work.Create();
         }
-        
+
         var repoPath = Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
         {
             Checkout = false,
@@ -108,9 +113,9 @@ public class BuildProcessor
                 return true;
             }
         });
-        
+
         var repo = new Repository(repoPath);
-        Commands.Fetch(repo, "origin", new string[] {task.Manifest.Plugin.Commit}, new FetchOptions
+        Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
             OnProgress = output =>
             {
@@ -134,42 +139,43 @@ public class BuildProcessor
         }
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
-        
-        var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(new CreateContainerParameters
-        {
-            Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
-            
-            // TODO: This depends on a change in DalamudPackager to extract dependencies on dev machines
-            // NetworkDisabled = true,
-            
-            AttachStderr = true,
-            AttachStdout = true,
-            HostConfig = new HostConfig
+
+        var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
+            new CreateContainerParameters
             {
-                Privileged = false,
-                IpcMode = "none",
-                AutoRemove = false,
-                Binds = new List<string>()
+                Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+
+                // TODO: This depends on a change in DalamudPackager to extract dependencies on dev machines
+                // NetworkDisabled = true,
+
+                AttachStderr = true,
+                AttachStdout = true,
+                HostConfig = new HostConfig
                 {
-                    $"{work.FullName}:/work/repo",
-                    $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
-                    "D:\\xivbuild\\static:/static:ro",
-                    $"{output.FullName}:/output",
+                    Privileged = false,
+                    IpcMode = "none",
+                    AutoRemove = false,
+                    Binds = new List<string>()
+                    {
+                        $"{work.FullName}:/work/repo",
+                        $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
+                        $"{staticFolder.FullName}:/static:ro",
+                        $"{output.FullName}:/output",
+                    }
+                },
+                Env = new List<string>
+                {
+                    $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
+                    $"PLOGON_PLUGIN_NAME={task.InternalName}",
+                    $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
+                    "DALAMUD_LIB_PATH=/work/dalamud/"
+                },
+                Entrypoint = new List<string>
+                {
+                    "/static/entrypoint.sh"
                 }
-            },
-            Env = new List<string>
-            {
-                $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
-                $"PLOGON_PLUGIN_NAME={task.InternalName}",
-                $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
-                "DALAMUD_LIB_PATH=/work/dalamud/"
-            },
-            Entrypoint = new List<string>
-            {
-                "/static/entrypoint.sh"
-            }
-        });
-        
+            });
+
         var startResponse =
             await this.dockerClient.Containers.StartContainerAsync(containerCreateResponse.ID,
                 new ContainerStartParameters());
@@ -192,7 +198,7 @@ public class BuildProcessor
         {
             var inspectResponse = await this.dockerClient.Containers.InspectContainerAsync(containerCreateResponse.ID);
             hasExited = inspectResponse.State.Running == false;
-            
+
             // Get logs from multiplexed stream
             var buffer = new byte[4096];
             var eof = false;
@@ -200,15 +206,16 @@ public class BuildProcessor
             {
                 var result = await logResponse.ReadOutputAsync(buffer, 0, buffer.Length, CancellationToken.None);
                 eof = result.EOF;
-                
+
                 var log = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
                 Log.Information(log.Replace("\n", string.Empty));
             }
         }
-        
-        var containerInspectResponse = await this.dockerClient.Containers.InspectContainerAsync(containerCreateResponse.ID);
+
+        var containerInspectResponse =
+            await this.dockerClient.Containers.InspectContainerAsync(containerCreateResponse.ID);
         var exitCode = containerInspectResponse.State.ExitCode;
-        
+
         Log.Information("Container for build exited, exit code: {Code}", exitCode);
 
         await this.dockerClient.Containers.RemoveContainerAsync(containerCreateResponse.ID,

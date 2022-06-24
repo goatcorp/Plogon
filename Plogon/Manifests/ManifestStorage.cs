@@ -24,10 +24,10 @@ public class ManifestStorage
         var channels = new Dictionary<string, IReadOnlyDictionary<string, Manifest>>();
 
         var stableDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "stable"));
-        var testingDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "testing")); 
+        var testingDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "testing"));
 
         channels.Add(stableDir.Name, GetManifestsInDirectory(stableDir));
-        
+
         foreach (var testingChannelDir in testingDir.EnumerateDirectories())
         {
             var manifests = GetManifestsInDirectory(testingChannelDir);
@@ -40,7 +40,7 @@ public class ManifestStorage
     private static Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory)
     {
         var manifests = new Dictionary<string, Manifest>();
-        
+
         foreach (var manifestDir in directory.EnumerateDirectories())
         {
             try
