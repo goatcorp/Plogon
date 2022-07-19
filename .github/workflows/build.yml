@@ -1,0 +1,18 @@
+﻿name: Build Plogon
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup .NET Core SDK
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: "6.0.x"
+      - name: Install dependencies
+        working-directory: Plogon
+        run: dotnet restore
+      - name: Build
+        working-directory: Plogon
+        run: dotnet build --configuration Release --no-restore
