@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,7 +47,7 @@ public class BuildProcessor
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
 
-    public async Task SetupDockerImage()
+    public async Task<List<ImageInspectResponse>> SetupDockerImage()
     {
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
             {
@@ -63,6 +65,15 @@ public class BuildProcessor
         {
             All = true,
         });
+
+        List<ImageInspectResponse> inspects = new();
+        foreach (var imagesListResponse in images)
+        {
+            var inspect = await this.dockerClient.Images.InspectImageAsync(imagesListResponse.ID);
+            inspects.Add(inspect);
+        }
+
+        return inspects;
     }
 
     public ISet<BuildTask> GetTasks()
@@ -97,24 +108,23 @@ public class BuildProcessor
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
 
-        if (work.GetFiles().Length != 0)
+        Debug.Assert(staticFolder.Exists);
+        
+        if (!work.Exists || work.GetFiles().Length == 0)
         {
-            //work.Delete(true);
-            //work.Create();
+            Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
+            {
+                Checkout = false,
+                RecurseSubmodules = false,
+                OnProgress = output =>
+                {
+                    Log.Verbose("Cloning: {GitOutput}", output);
+                    return true;
+                }
+            });
         }
 
-        var repoPath = Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
-        {
-            Checkout = false,
-            RecurseSubmodules = false,
-            OnProgress = output =>
-            {
-                Log.Verbose("Cloning: {GitOutput}", output);
-                return true;
-            }
-        });
-
-        var repo = new Repository(repoPath);
+        var repo = new Repository(work.FullName);
         Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
             OnProgress = output =>
