@@ -408,42 +408,46 @@ public class BuildProcessor
 
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
 
-        if (!dpOutput.Exists)
-            throw new Exception("DalamudPackager output not found?");
-
-        var artifact = this.artifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
-        try
+        if (dpOutput.Exists)
         {
-            foreach (var file in dpOutput.GetFiles())
-            {
-                file.CopyTo(Path.Combine(artifact.FullName, file.Name), true);
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Could not copy to artifact output");
-            throw new Exception("Could not copy to artifact", ex);
-        }
-
-        if (exitCode == 0 && commit)
-        {
+            var artifact = this.artifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
             try
             {
-                this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);
-                var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
-
                 foreach (var file in dpOutput.GetFiles())
                 {
-                    file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
+                    file.CopyTo(Path.Combine(artifact.FullName, file.Name), true);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "Error during plugin commit");
-                throw new PluginCommitException(ex);
+                Log.Error(ex, "Could not copy to artifact output");
+                throw new Exception("Could not copy to artifact", ex);
+            }
+
+            if (exitCode == 0 && commit)
+            {
+                try
+                {
+                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);
+                    var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
+
+                    foreach (var file in dpOutput.GetFiles())
+                    {
+                        file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "Error during plugin commit");
+                    throw new PluginCommitException(ex);
+                }
             }
         }
-
+        else if (exitCode == 0)
+        {
+            throw new Exception("DalamudPackager output not found?");
+        }
+        
         return new BuildResult(exitCode == 0, diffUrl);
     }
 
