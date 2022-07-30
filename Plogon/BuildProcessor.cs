@@ -227,6 +227,8 @@ public class BuildProcessor
         using var client = new HttpClient();
         var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
         res.EnsureSuccessStatusCode();
+        
+        Log.Information(await res.Content.ReadAsStringAsync());
 
         var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
 
