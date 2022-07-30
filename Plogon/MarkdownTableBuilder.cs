@@ -26,14 +26,14 @@ public class MarkdownTableBuilder
 
     public override string ToString()
     {
-        var output = cols.Aggregate(string.Empty, (current, col) => current + $"| {col} | ");
+        var output = "|" + cols.Aggregate(string.Empty, (current, col) => current + $" {col} | ");
         output += "\n";
-        output = cols.Aggregate(output, (current, col) => current + $"| {new string('-', col.Length)} | ");
+        output = "|" + cols.Aggregate(output, (current, col) => current + $" {new string('-', col.Length)} | ");
         output += "\n";
 
         foreach (var row in rows)
         {
-            output = row.Aggregate(output, (current, col) => current + $"| {col} | ");
+            output = "|" + row.Aggregate(output, (current, col) => current + $" {col} | ");
             output += "\n";
         }
 

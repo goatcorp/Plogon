@@ -56,7 +56,7 @@ class Program
                 GitHubOutputBuilder.EndGroup();
 
                 githubSummary += imagesMd.ToString();
-                githubSummary += "\n### Build Results";
+                githubSummary += "\n### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create("", "Name", "Commit", "Status");
                 
@@ -71,6 +71,7 @@ class Program
                             task.HaveCommit ?? "nothing");
 
                         buildsMd.AddRow("👽", task.InternalName, task.Manifest.Plugin.Commit, "Not your plugin");
+                        continue;
                     }
                     
                     if (aborted)
