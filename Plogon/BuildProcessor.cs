@@ -25,6 +25,7 @@ public class BuildProcessor
     private readonly DirectoryInfo manifestFolder;
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
+    private readonly DirectoryInfo artifactFolder;
 
 
     private readonly DockerClient dockerClient;
@@ -37,12 +38,13 @@ public class BuildProcessor
     private const string DOCKER_TAG = "6.0.300";
 
     public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder)
     {
         this.repoFolder = repoFolder;
         this.manifestFolder = manifestFolder;
         this.workFolder = workFolder;
         this.staticFolder = staticFolder;
+        this.artifactFolder = artifactFolder;
 
         this.pluginRepository = new PluginRepository(repoFolder);
         this.manifestStorage = new ManifestStorage(manifestFolder);
@@ -355,13 +357,27 @@ public class BuildProcessor
                 Force = true,
             });
 
+        var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
+
+        if (!dpOutput.Exists)
+            throw new Exception("DalamudPackager output not found?");
+
+        var artifact = this.artifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
+        try
+        {
+            foreach (var file in dpOutput.GetFiles())
+            {
+                file.CopyTo(Path.Combine(artifact.FullName, file.Name), true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Could not copy to artifact output");
+            throw new Exception("Could not copy to artifact", ex);
+        }
+
         if (exitCode == 0 && commit)
         {
-            var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
-
-            if (!dpOutput.Exists)
-                throw new Exception("DalamudPackager output not found?");
-
             try
             {
                 this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);

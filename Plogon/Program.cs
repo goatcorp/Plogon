@@ -16,11 +16,12 @@ class Program
     /// <param name="manifestFolder">The folder used for storing plugin manifests.</param>
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
     /// <param name="staticFolder">The 'static' folder that holds script files.</param>
+    /// <param name="artifactFolder">The folder to store artifacts in.</param>
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
     /// <param name="ownerId">Creator of the request.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, bool ci = false, bool commit = false, int ownerId = -1)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, int ownerId = -1)
     {
         SetupLogging();
 
@@ -31,7 +32,7 @@ class Program
 
         try
         {
-            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder);
+            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder);
             var tasks = buildProcessor.GetTasks();
 
             if (!tasks.Any())
