@@ -19,9 +19,9 @@ class Program
     /// <param name="artifactFolder">The folder to store artifacts in.</param>
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
-    /// <param name="ownerId">Creator of the request.</param>
+    /// <param name="actor">Creator of the request.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, int ownerId = -1)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, string? actor = null)
     {
         SetupLogging();
 
@@ -64,7 +64,7 @@ class Program
                 {
                     GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest.Plugin.Commit})");
 
-                    if (ownerId > 0 && task.Manifest.Plugin.Owners.All(x => x != ownerId))
+                    if (actor != null && task.Manifest.Plugin.Owners.All(x => x != actor))
                     {
                         Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,

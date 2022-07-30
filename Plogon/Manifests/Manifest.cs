@@ -9,7 +9,7 @@ public class Manifest
     {
         public PluginInfo()
         {
-            this.Owners = new List<uint>();
+            this.Owners = new List<string>();
         }
     
         public string Repository { get; set; }
@@ -20,7 +20,7 @@ public class Manifest
     
         public string Changelog { get; set; }
     
-        public List<uint> Owners { get; set; }
+        public List<string> Owners { get; set; }
     }
     
     public PluginInfo Plugin { get; set; }
