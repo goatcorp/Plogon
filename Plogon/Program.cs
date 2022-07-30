@@ -25,7 +25,7 @@ class Program
     {
         SetupLogging();
 
-        var githubSummary = "## Build Summary\n### Base Images\n";
+        var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
         
         var aborted = false;
@@ -54,9 +54,8 @@ class Program
                 }
 
                 GitHubOutputBuilder.EndGroup();
-
-                githubSummary += imagesMd.ToString();
-                githubSummary += "\n### Build Results\n";
+                
+                githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create("", "Name", "Commit", "Status");
                 
@@ -124,6 +123,9 @@ class Program
                 }
 
                 githubSummary += buildsMd.ToString();
+
+                githubSummary += "### Images used\n";
+                githubSummary += imagesMd.ToString();
             }
         }
         finally
