@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+#pragma warning disable CS1591
 
 namespace Plogon;
 
@@ -24,16 +25,17 @@ public class MarkdownTableBuilder
         return this;
     }
 
-    public override string ToString()
-    {
-        var output = "|" + cols.Aggregate(string.Empty, (current, col) => current + $" {col} | ");
-        output += "\n";
-        output = "|" + cols.Aggregate(output, (current, col) => current + $" {new string('-', col.Length)} | ");
+    public override string ToString() {
+        var output = "|";
+        foreach (var col in cols) output += $"{col}|";
+        output += "\n|";
+        
+        foreach (var col in cols) output += $"{new string('-', col.Length)}|";
         output += "\n";
 
-        foreach (var row in rows)
-        {
-            output = "|" + row.Aggregate(output, (current, col) => current + $" {col} | ");
+        foreach (var row in rows) {
+            output += "|";
+            foreach (var col in row) output += $"{col}|";
             output += "\n";
         }
 

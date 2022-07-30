@@ -42,11 +42,23 @@ public class PluginRepository
         File.WriteAllText(this.StateFile.FullName, Toml.FromModel(this.state));
     }
 
+    /// <summary>
+    /// Get the output directory of a plugin.
+    /// </summary>
+    /// <param name="channelName">The name of the channel</param>
+    /// <param name="plugin">The internalname of the plugin</param>
+    /// <returns>The target output directory</returns>
     public DirectoryInfo GetPluginOutputDirectory(string channelName, string plugin)
     {
         return this.repoDirectory.CreateSubdirectory(channelName).CreateSubdirectory(plugin);
     }
     
+    /// <summary>
+    /// Get the state of a plugin on the repo
+    /// </summary>
+    /// <param name="channelName">The name of the channel</param>
+    /// <param name="plugin">The internalname of the plugin</param>
+    /// <returns>The state of the plugin, or null if not present</returns>
     public State.Channel.PluginState? GetPluginState(string channelName, string plugin)
     {
         if (!this.state.Channels.ContainsKey(channelName))
@@ -64,6 +76,12 @@ public class PluginRepository
         return null;
     }
 
+    /// <summary>
+    /// Update the have commit on the repo
+    /// </summary>
+    /// <param name="channelName">The name of the channel</param>
+    /// <param name="plugin">The internalname of the plugin</param>
+    /// <param name="haveCommit">Commit that is now have</param>
     public void UpdatePluginHave(string channelName, string plugin, string haveCommit)
     {
         if (!this.state.Channels.ContainsKey(channelName))

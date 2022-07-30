@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Serilog;
 using Tomlyn;
+#pragma warning disable CS1591
 
 namespace Plogon.Manifests;
 
@@ -16,11 +17,7 @@ public class ManifestStorage
     public ManifestStorage(DirectoryInfo baseDirectory)
     {
         this.baseDirectory = baseDirectory;
-        this.Load();
-    }
-
-    private void Load()
-    {
+        
         var channels = new Dictionary<string, IReadOnlyDictionary<string, Manifest>>();
 
         var stableDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "stable"));

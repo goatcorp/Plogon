@@ -57,7 +57,7 @@ class Program
                 
                 githubSummary += "### Build Results\n";
 
-                var buildsMd = MarkdownTableBuilder.Create("", "Name", "Commit", "Status");
+                var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
                 
                 foreach (var task in tasks)
                 {

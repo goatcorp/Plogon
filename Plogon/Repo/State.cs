@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+#pragma warning disable CS1591
+#pragma warning disable CS8618
 
 namespace Plogon.Repo;
 

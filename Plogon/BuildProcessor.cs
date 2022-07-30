@@ -19,6 +19,9 @@ using Serilog;
 
 namespace Plogon;
 
+/// <summary>
+/// Class that generates and processes build tasks
+/// </summary>
 public class BuildProcessor
 {
     private readonly DirectoryInfo repoFolder;
@@ -37,6 +40,14 @@ public class BuildProcessor
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
 
+    /// <summary>
+    /// Set up build processor
+    /// </summary>
+    /// <param name="repoFolder">Repo</param>
+    /// <param name="manifestFolder">Manifests</param>
+    /// <param name="workFolder">Work</param>
+    /// <param name="staticFolder">Static</param>
+    /// <param name="artifactFolder">Artifacts</param>
     public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
         DirectoryInfo staticFolder, DirectoryInfo artifactFolder)
     {
@@ -53,6 +64,10 @@ public class BuildProcessor
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
 
+    /// <summary>
+    /// Set up needed docker images for containers.
+    /// </summary>
+    /// <returns>List of images</returns>
     public async Task<List<ImageInspectResponse>> SetupDockerImage()
     {
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
@@ -82,6 +97,10 @@ public class BuildProcessor
         return inspects;
     }
 
+    /// <summary>
+    /// Get all tasks that need to be done
+    /// </summary>
+    /// <returns>A set of tasks that are pending</returns>
     public ISet<BuildTask> GetTasks()
     {
         var tasks = new HashSet<BuildTask>();
@@ -160,7 +179,7 @@ public class BuildProcessor
     private class HasteResponse
     {
         [JsonPropertyName("key")]
-        public string Key { get; set; }
+        public string? Key { get; }
     };
     
     private async Task<string> GetDiffUrl(DirectoryInfo workDir, string haveCommit, string wantCommit)
@@ -212,13 +231,41 @@ public class BuildProcessor
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
     }
 
+    /// <summary>
+    /// Info about build status
+    /// </summary>
     public class BuildResult
     {
-        public bool Success { get; set; }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="success">If it worked</param>
+        /// <param name="diffUrl">diff url</param>
+        public BuildResult(bool success, string diffUrl)
+        {
+            this.Success = success;
+            this.DiffUrl = diffUrl;
+        }
         
-        public string DiffUrl { get; set; }
+        /// <summary>
+        /// If it worked
+        /// </summary>
+        public bool Success { get; private set; }
+        
+        /// <summary>
+        /// Where the diff is
+        /// </summary>
+        public string DiffUrl { get; private set; }
     }
     
+    /// <summary>
+    /// Check out and build a plugin from a task
+    /// </summary>
+    /// <param name="task">The task to build</param>
+    /// <param name="commit">Whether or not the plugin should be committed to the repo</param>
+    /// <returns>The result of the build</returns>
+    /// <exception cref="Exception">Generic build system errors</exception>
+    /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
     public async Task<BuildResult> ProcessTask(BuildTask task, bool commit)
     {
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
@@ -397,15 +444,18 @@ public class BuildProcessor
             }
         }
 
-        return new BuildResult
-        {
-            DiffUrl = diffUrl,
-            Success = exitCode == 0,
-        };
+        return new BuildResult(exitCode == 0, diffUrl);
     }
 
+    /// <summary>
+    /// Exception when repo commit fails
+    /// </summary>
     public class PluginCommitException : Exception
     {
+        /// <summary>
+        /// ctor
+        /// </summary>
+        /// <param name="inner">Actual error</param>
         public PluginCommitException(Exception inner)
             : base("Could not commit plugin.", inner)
         {
