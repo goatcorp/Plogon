@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using LibGit2Sharp;
+using Newtonsoft.Json;
 using Plogon.Manifests;
 using Plogon.Repo;
 using Serilog;
@@ -102,12 +103,65 @@ public class BuildProcessor
         return tasks;
     }
 
+    private async Task RestorePackages(BuildTask task, DirectoryInfo workFolder, DirectoryInfo pkgFolder)
+    {
+        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath, "packages.lock.json"));
+
+        if (!lockFile.Exists)
+            throw new Exception("Lock file not present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+
+        var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(lockFile.FullName));
+
+        if (lockFileData.Version != 1)
+            throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
+
+        var runtime = lockFileData.Runtimes.First();
+        Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
+
+        using var client = new HttpClient();
+
+        async Task GetDep(string name, NugetLockfile.Dependency dependency)
+        {
+            Log.Information("   => Getting {DepName}(v{Version})", name, dependency.Resolved);
+
+            var pkgName = name.ToLower();
+            var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
+            var url =
+                $"https://api.nuget.org/v3-flatcontainer/{pkgName}/{dependency.Resolved}/{fileName}";
+
+            var data = await client.GetByteArrayAsync(url);
+            
+            // TODO: verify content hash
+            
+            await File.WriteAllBytesAsync(Path.Combine(pkgFolder.FullName, fileName), data);
+        }
+        
+        foreach (var dependency in runtime.Value)
+        {
+            await GetDep(dependency.Key, dependency.Value);
+        }
+
+        await GetDep("Microsoft.NETCore.App.Ref", new NugetLockfile.Dependency()
+        {
+            Resolved = "5.0.0"
+        });
+        
+        await GetDep("Microsoft.AspNetCore.App.Ref", new NugetLockfile.Dependency()
+        {
+            Resolved = "5.0.0"
+        });
+    }
+
     public async Task<bool> ProcessTask(BuildTask task)
     {
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
+        var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
 
+        if (task.Manifest.Plugin.ProjectPath.Contains(".."))
+            throw new Exception("Not allowed");
+        
         Debug.Assert(staticFolder.Exists);
         
         if (!work.Exists || work.GetFiles().Length == 0)
@@ -150,13 +204,14 @@ public class BuildProcessor
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
+        await RestorePackages(task, work, packages);
+        
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
                 Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
-
-                // TODO: This depends on a change in DalamudPackager to extract dependencies on dev machines
-                // NetworkDisabled = true,
+                
+                NetworkDisabled = true,
 
                 AttachStderr = true,
                 AttachStdout = true,
@@ -165,12 +220,13 @@ public class BuildProcessor
                     Privileged = false,
                     IpcMode = "none",
                     AutoRemove = false,
-                    Binds = new List<string>()
+                    Binds = new List<string>
                     {
                         $"{work.FullName}:/work/repo",
                         $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
                         $"{staticFolder.FullName}:/static:ro",
                         $"{output.FullName}:/output",
+                        $"{packages.FullName}:/packages:ro",
                     }
                 },
                 Env = new List<string>
