@@ -221,6 +221,8 @@ public class BuildProcessor
         await process.WaitForExitAsync();
         if (process.ExitCode != 0)
             throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+        
+        Log.Information("{Args}: {Length}", diffPsi.Arguments, output.Length);
 
         using var client = new HttpClient();
         var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
