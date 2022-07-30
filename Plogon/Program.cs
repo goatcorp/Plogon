@@ -115,11 +115,13 @@ class Program
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
                         buildsMd.AddRow("⁉️", task.InternalName, task.Manifest.Plugin.Commit, "Could not commit to repo");
                         aborted = true;
+                        anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
                         buildsMd.AddRow("😰", task.InternalName, task.Manifest.Plugin.Commit, $"Build system error: {ex.Message}");
+                        anyFailed = true;
                     }
 
                     GitHubOutputBuilder.EndGroup();
