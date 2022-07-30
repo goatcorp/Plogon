@@ -89,16 +89,18 @@ class Program
                             task.HaveCommit ?? "nothing");
                         var status = await buildProcessor.ProcessTask(task, commit);
 
-                        if (!status)
+                        if (status.Success)
                         {
-                            Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
-                                task.Manifest.Plugin.Commit);
+                            Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
+                                task.Manifest.Plugin.Commit, status.DiffUrl);
                             
-                            buildsMd.AddRow("✔️", task.InternalName, task.Manifest.Plugin.Commit, string.Empty);
+                            buildsMd.AddRow("✔️", task.InternalName, task.Manifest.Plugin.Commit, $"[Diff]({status.DiffUrl})");
                         }
                         else
                         {
-                            buildsMd.AddRow("❌", task.InternalName, task.Manifest.Plugin.Commit, "Build failed");
+                            Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
+                                task.Manifest.Plugin.Commit);
+                            buildsMd.AddRow("❌", task.InternalName, task.Manifest.Plugin.Commit, $"Build failed ([Diff]({status.DiffUrl}))");
                         }
                     }
                     catch (BuildProcessor.PluginCommitException ex)

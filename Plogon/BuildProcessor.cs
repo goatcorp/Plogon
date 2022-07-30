@@ -4,6 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Docker.DotNet;
@@ -152,7 +155,67 @@ public class BuildProcessor
         });
     }
 
-    public async Task<bool> ProcessTask(BuildTask task, bool commit)
+    private class HasteResponse
+    {
+        [JsonPropertyName("key")]
+        public string Key { get; set; }
+    };
+    
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string haveCommit, string wantCommit)
+    {
+        if (string.IsNullOrEmpty(haveCommit))
+        {
+            var revListPsi = new ProcessStartInfo("git", "rev-list --max-parents=0 HEAD")
+            {
+                RedirectStandardOutput = true,
+                WorkingDirectory = workDir.FullName,
+            };
+
+            var revListProcess = Process.Start(revListPsi);
+            if (revListProcess == null)
+                throw new Exception("Could not start rev-list");
+
+            haveCommit = Regex.Replace(revListProcess.StandardOutput.ReadToEnd(), @"\t|\n|\r", "");
+
+            if (revListProcess.ExitCode != 0)
+                throw new Exception("Rev-list did not succeed");
+            
+            Log.Information("Using {NewRev} as have", haveCommit);
+        }
+        
+        var diffPsi = new ProcessStartInfo("git",
+            $"diff --submodule=diff {haveCommit}..{wantCommit}")
+        {
+            RedirectStandardOutput = true,
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(diffPsi);
+        if (process == null)
+            throw new Exception("Diff process was null.");
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+
+        if (process.ExitCode != 0)
+            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+
+        using var client = new HttpClient();
+        var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
+        res.EnsureSuccessStatusCode();
+
+        var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+
+        return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+    }
+
+    public class BuildResult
+    {
+        public bool Success { get; set; }
+        
+        public string DiffUrl { get; set; }
+    }
+    
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit)
     {
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
@@ -201,6 +264,8 @@ public class BuildProcessor
                 }
             });
         }
+        
+        var diffUrl = await GetDiffUrl(work, task.HaveCommit!, task.Manifest.Plugin.Commit);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
@@ -314,7 +379,11 @@ public class BuildProcessor
             }
         }
 
-        return exitCode == 0;
+        return new BuildResult
+        {
+            DiffUrl = diffUrl,
+            Success = exitCode == 0,
+        };
     }
 
     public class PluginCommitException : Exception
