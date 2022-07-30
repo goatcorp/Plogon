@@ -186,23 +186,7 @@ public class BuildProcessor
     {
         if (string.IsNullOrEmpty(haveCommit))
         {
-            var revListPsi = new ProcessStartInfo("git", "rev-list --max-parents=0 HEAD")
-            {
-                RedirectStandardOutput = true,
-                WorkingDirectory = workDir.FullName,
-            };
-
-            var revListProcess = Process.Start(revListPsi);
-            if (revListProcess == null)
-                throw new Exception("Could not start rev-list");
-
-            haveCommit = Regex.Replace(revListProcess.StandardOutput.ReadToEnd(), @"\t|\n|\r", "");
-
-            await revListProcess.WaitForExitAsync();
-            if (revListProcess.ExitCode != 0)
-                throw new Exception("Rev-list did not succeed");
-            
-            Log.Information("Using {NewRev} as have", haveCommit);
+            haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
         }
         
         var diffPsi = new ProcessStartInfo("git",
