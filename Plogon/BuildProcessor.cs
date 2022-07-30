@@ -179,7 +179,7 @@ public class BuildProcessor
     private class HasteResponse
     {
         [JsonPropertyName("key")]
-        public string? Key { get; }
+        public string? Key { get; set; }
     };
     
     private async Task<string> GetDiffUrl(DirectoryInfo workDir, string haveCommit, string wantCommit)
@@ -222,13 +222,11 @@ public class BuildProcessor
         if (process.ExitCode != 0)
             throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
         
-        Log.Information("{Args}: {Length}", diffPsi.Arguments, output.Length);
+        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
 
         using var client = new HttpClient();
         var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
         res.EnsureSuccessStatusCode();
-        
-        Log.Information(await res.Content.ReadAsStringAsync());
 
         var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
 
