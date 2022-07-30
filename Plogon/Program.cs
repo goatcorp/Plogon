@@ -29,6 +29,7 @@ class Program
         GitHubOutputBuilder.SetActive(ci);
         
         var aborted = false;
+        var anyFailed = false;
 
         try
         {
@@ -101,7 +102,9 @@ class Program
                         {
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
                                 task.Manifest.Plugin.Commit);
+                            
                             buildsMd.AddRow("❌", task.InternalName, task.Manifest.Plugin.Commit, $"Build failed ([Diff]({status.DiffUrl}))");
+                            anyFailed = true;
                         }
                     }
                     catch (BuildProcessor.PluginCommitException ex)
@@ -137,7 +140,7 @@ class Program
             }
         }
 
-        if (aborted)
+        if (aborted || anyFailed)
             Environment.ExitCode = -1;
     }
 
