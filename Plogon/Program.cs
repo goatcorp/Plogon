@@ -140,10 +140,9 @@ class Program
             {
                 await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
             }
-        }
 
-        if (aborted || anyFailed)
-            Environment.ExitCode = -1;
+            if (aborted || anyFailed) Environment.Exit(1);
+        }
     }
 
     private static void SetupLogging()
