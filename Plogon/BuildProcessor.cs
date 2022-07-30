@@ -179,6 +179,7 @@ public class BuildProcessor
 
             haveCommit = Regex.Replace(revListProcess.StandardOutput.ReadToEnd(), @"\t|\n|\r", "");
 
+            await revListProcess.WaitForExitAsync();
             if (revListProcess.ExitCode != 0)
                 throw new Exception("Rev-list did not succeed");
             
@@ -198,6 +199,7 @@ public class BuildProcessor
 
         var output = await process.StandardOutput.ReadToEndAsync();
 
+        await process.WaitForExitAsync();
         if (process.ExitCode != 0)
             throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
 
