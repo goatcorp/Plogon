@@ -152,7 +152,7 @@ public class BuildProcessor
         });
     }
 
-    public async Task<bool> ProcessTask(BuildTask task)
+    public async Task<bool> ProcessTask(BuildTask task, bool commit)
     {
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
@@ -290,6 +290,38 @@ public class BuildProcessor
                 Force = true,
             });
 
+        if (exitCode == 0 && commit)
+        {
+            var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
+
+            if (!dpOutput.Exists)
+                throw new Exception("DalamudPackager output not found?");
+
+            try
+            {
+                this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);
+                var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
+
+                foreach (var file in dpOutput.GetFiles())
+                {
+                    file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error during plugin commit");
+                throw new PluginCommitException(ex);
+            }
+        }
+
         return exitCode == 0;
+    }
+
+    public class PluginCommitException : Exception
+    {
+        public PluginCommitException(Exception inner)
+            : base("Could not commit plugin.", inner)
+        {
+        }
     }
 }

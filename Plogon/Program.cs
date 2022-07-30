@@ -17,67 +17,122 @@ class Program
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
     /// <param name="staticFolder">The 'static' folder that holds script files.</param>
     /// <param name="ci">Running in CI.</param>
+    /// <param name="commit">Commit to repo.</param>
+    /// <param name="ownerId">Creator of the request.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, bool ci = false)
+        DirectoryInfo staticFolder, bool ci = false, bool commit = false, int ownerId = -1)
     {
         SetupLogging();
 
-        var githubSummary = "## Build Summary";
+        var githubSummary = "## Build Summary\n### Base Images\n";
         GitHubOutputBuilder.SetActive(ci);
         
-        var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder);
-        var tasks = buildProcessor.GetTasks();
+        var aborted = false;
 
-        if (!tasks.Any())
+        try
         {
-            Log.Information("Nothing to do, goodbye...");
-            githubSummary += "No tasks were detected, this is probably an issue on our side, please report.";
-        }
-        else
-        {
-            GitHubOutputBuilder.StartGroup("Get images");
-            var images = await buildProcessor.SetupDockerImage();
-            Debug.Assert(images.Any(), "No images returned");
+            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder);
+            var tasks = buildProcessor.GetTasks();
 
-            var imagesMd = MarkdownTableBuilder.Create("Tags", "Created");
-            foreach (var imageInspectResponse in images)
+            if (!tasks.Any())
             {
-                imagesMd.AddRow(string.Join(",", imageInspectResponse.RepoTags), imageInspectResponse.Created.ToLongDateString());
+                Log.Information("Nothing to do, goodbye...");
+                githubSummary += "No tasks were detected, this is probably an issue on our side, please report.";
             }
-            GitHubOutputBuilder.EndGroup();
-
-            githubSummary += imagesMd.ToString();
-
-            foreach (var task in tasks)
+            else
             {
-                GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest.Plugin.Commit})");
-                
-                try
-                {
-                    Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
-                        task.Manifest.Plugin.Commit,
-                        task.HaveCommit ?? "nothing");
-                    var status = await buildProcessor.ProcessTask(task);
+                GitHubOutputBuilder.StartGroup("Get images");
+                var images = await buildProcessor.SetupDockerImage();
+                Debug.Assert(images.Any(), "No images returned");
 
-                    if (!status)
-                    {
-                        Log.Error("Could not build: {Name} - {Sha}", task.InternalName, task.Manifest.Plugin.Commit);
-                    }
-                }
-                catch (Exception ex)
+                var imagesMd = MarkdownTableBuilder.Create("Tags", "Created");
+                foreach (var imageInspectResponse in images)
                 {
-                    Log.Error(ex, "Could not build");
+                    imagesMd.AddRow(string.Join(",", imageInspectResponse.RepoTags),
+                        imageInspectResponse.Created.ToLongDateString());
                 }
 
                 GitHubOutputBuilder.EndGroup();
+
+                githubSummary += imagesMd.ToString();
+                githubSummary += "\n### Build Results";
+
+                var buildsMd = MarkdownTableBuilder.Create("", "Name", "Commit", "Status");
+                
+                foreach (var task in tasks)
+                {
+                    GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest.Plugin.Commit})");
+
+                    if (ownerId > 0 && task.Manifest.Plugin.Owners.All(x => x != ownerId))
+                    {
+                        Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
+                            task.Manifest.Plugin.Commit,
+                            task.HaveCommit ?? "nothing");
+
+                        buildsMd.AddRow("👽", task.InternalName, task.Manifest.Plugin.Commit, "Not your plugin");
+                    }
+                    
+                    if (aborted)
+                    {
+                        Log.Information("Aborted, won't run: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
+                            task.Manifest.Plugin.Commit,
+                            task.HaveCommit ?? "nothing");
+
+                        buildsMd.AddRow("❔", task.InternalName, task.Manifest.Plugin.Commit, "Not ran");
+                        continue;
+                    }
+                    
+                    try
+                    {
+                        Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
+                            task.Manifest.Plugin.Commit,
+                            task.HaveCommit ?? "nothing");
+                        var status = await buildProcessor.ProcessTask(task, commit);
+
+                        if (!status)
+                        {
+                            Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
+                                task.Manifest.Plugin.Commit);
+                            
+                            buildsMd.AddRow("✔️", task.InternalName, task.Manifest.Plugin.Commit, string.Empty);
+                        }
+                        else
+                        {
+                            buildsMd.AddRow("❌", task.InternalName, task.Manifest.Plugin.Commit, "Build failed");
+                        }
+                    }
+                    catch (BuildProcessor.PluginCommitException ex)
+                    {
+                        // We just can't make sure that the state of the repo is consistent here...
+                        // Need to abort.
+                        
+                        Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
+                        buildsMd.AddRow("⁉️", task.InternalName, task.Manifest.Plugin.Commit, "Could not commit to repo");
+                        aborted = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "Could not build");
+                        buildsMd.AddRow("😰", task.InternalName, task.Manifest.Plugin.Commit, $"Build system error: {ex.Message}");
+                    }
+
+                    GitHubOutputBuilder.EndGroup();
+                }
+
+                githubSummary += buildsMd.ToString();
+            }
+        }
+        finally
+        {
+            var githubSummaryFilePath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
+            if (!string.IsNullOrEmpty(githubSummaryFilePath))
+            {
+                await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
             }
         }
 
-        var githubSummaryFilePath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
-        if (!string.IsNullOrEmpty(githubSummaryFilePath))
-        {
-            await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
-        }
+        if (aborted)
+            Environment.ExitCode = -1;
     }
 
     private static void SetupLogging()

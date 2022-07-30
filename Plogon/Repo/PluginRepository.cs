@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using System.Linq;
 using Serilog;
 using Tomlyn;
@@ -11,6 +12,7 @@ namespace Plogon.Repo;
 public class PluginRepository
 {
     private readonly DirectoryInfo repoDirectory;
+    private FileInfo StateFile => new FileInfo(Path.Combine(repoDirectory.FullName, "State.toml"));
 
     private State state;
     
@@ -21,11 +23,10 @@ public class PluginRepository
     public PluginRepository(DirectoryInfo repoDirectory)
     {
         this.repoDirectory = repoDirectory;
-
-        var stateFile = new FileInfo(Path.Combine(repoDirectory.FullName, "State.toml"));
-        if (stateFile.Exists)
+        
+        if (StateFile.Exists)
         {
-            this.state = Toml.ToModel<State>(stateFile.OpenText().ReadToEnd());
+            this.state = Toml.ToModel<State>(StateFile.OpenText().ReadToEnd());
         }
         else
         {
@@ -34,6 +35,16 @@ public class PluginRepository
         }
         
         Log.Information("Plugin repository at {repo} initialized", repoDirectory.FullName);
+    }
+
+    private void SaveState()
+    {
+        File.WriteAllText(this.StateFile.FullName, Toml.FromModel(this.state));
+    }
+
+    public DirectoryInfo GetPluginOutputDirectory(string channelName, string plugin)
+    {
+        return this.repoDirectory.CreateSubdirectory(channelName).CreateSubdirectory(plugin);
     }
     
     public State.Channel.PluginState? GetPluginState(string channelName, string plugin)
@@ -51,5 +62,29 @@ public class PluginRepository
         }
 
         return null;
+    }
+
+    public void UpdatePluginHave(string channelName, string plugin, string haveCommit)
+    {
+        if (!this.state.Channels.ContainsKey(channelName))
+        {
+            this.state.Channels[channelName] = new State.Channel();
+        }
+        
+        var channel = this.state.Channels[channelName];
+        if (channel.Plugins.TryGetValue(plugin, out var pluginState))
+        {
+            pluginState.BuiltCommit = haveCommit;
+        }
+        else
+        {
+            var newState = new State.Channel.PluginState()
+            {
+                BuiltCommit = haveCommit,
+            };
+            channel.Plugins[plugin] = newState;
+        }
+        
+        SaveState();
     }
 }
