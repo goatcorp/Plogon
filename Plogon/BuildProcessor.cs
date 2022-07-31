@@ -263,6 +263,10 @@ public class BuildProcessor
             throw new Exception("Not allowed");
         
         Debug.Assert(staticFolder.Exists);
+
+        if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
+            !task.Manifest.Plugin.Repository.EndsWith(".git"))
+            throw new Exception("You can only use HTTPS git endpoints for your plugin.");
         
         if (!work.Exists || work.GetFiles().Length == 0)
         {
