@@ -24,7 +24,7 @@ class Program
     /// <param name="prNumber">The number of the acting PR.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
         DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false,
-        string? actor = null, string? repoName = null, int prNumber = 0)
+        string? actor = null, string? repoName = null, int? prNumber = null)
     {
         SetupLogging();
 
@@ -146,9 +146,9 @@ class Program
                 githubSummary += "### Images used\n";
                 githubSummary += imagesMd.ToString();
 
-                if (prNumber != 0)
+                if (prNumber.HasValue)
                 {
-                    var commentTask = gitHubApi?.AddComment(repoName!, prNumber,
+                    var commentTask = gitHubApi?.AddComment(repoName!, prNumber.Value,
                         (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
                         "\n\n" + buildsMd.ToString());
 
