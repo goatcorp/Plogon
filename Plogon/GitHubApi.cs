@@ -1,5 +1,4 @@
-﻿using System;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -12,6 +11,7 @@ namespace Plogon;
 /// </summary>
 public class GitHubApi
 {
+    private readonly string token;
     private readonly HttpClient client;
 
     /// <summary>
@@ -20,13 +20,12 @@ public class GitHubApi
     /// <param name="token">Github token</param>
     public GitHubApi(string token)
     {
+        this.token = token;
         this.client = new HttpClient()
         {
-            BaseAddress = new Uri("https://api.github.com"),
             DefaultRequestHeaders =
             {
                 Accept = {new MediaTypeWithQualityHeaderValue("application/vnd.github+json")},
-                Authorization = new AuthenticationHeaderValue("token", token),
             }
         };
     }
@@ -49,8 +48,14 @@ public class GitHubApi
             Body = body,
         };
 
-        var response = await this.client.PostAsync($"/repos/{repo}/issues/{issueNumber}/comments", JsonContent.Create(jsonBody));
+        Log.Verbose("Sending comment to PR #{PrNumber} for {RepoName}", issueNumber, repo);
+
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://api.github.com/repos/{repo}/issues/{issueNumber}/comments");
+        request.Headers.Add("Authorization", $"token {this.token}");
+        request.Content = JsonContent.Create(jsonBody);
+
+        var response = await this.client.SendAsync(request);
         response.EnsureSuccessStatusCode();
-        Log.Verbose("Sent comment to PR #{PrNumber} for {RepoName}", issueNumber, repo);
     }
 }
