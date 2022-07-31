@@ -27,6 +27,10 @@ class Program
 
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
+        
+        var actor = Environment.GetEnvironmentVariable("GITHUB_ACTOR");
+        var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
+        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
 
         GitHubApi? gitHubApi = null;
         if (ci)
@@ -36,13 +40,9 @@ class Program
                 throw new Exception("GITHUB_TOKEN not set");
             
             gitHubApi = new GitHubApi(token);
-            Log.Verbose("GitHub API OK");
+            Log.Verbose("GitHub API OK, running for {Actor}", actor);
         }
 
-        var actor = Environment.GetEnvironmentVariable("GITHUB_ACTOR");
-        var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
-        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
-        
         var aborted = false;
         var anyFailed = false;
 
