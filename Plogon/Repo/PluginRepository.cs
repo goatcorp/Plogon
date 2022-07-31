@@ -93,12 +93,14 @@ public class PluginRepository
         if (channel.Plugins.TryGetValue(plugin, out var pluginState))
         {
             pluginState.BuiltCommit = haveCommit;
+            pluginState.TimeBuilt = DateTime.Now;
         }
         else
         {
             var newState = new State.Channel.PluginState()
             {
                 BuiltCommit = haveCommit,
+                TimeBuilt = DateTime.Now,
             };
             channel.Plugins[plugin] = newState;
         }
