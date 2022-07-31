@@ -146,9 +146,12 @@ class Program
                 githubSummary += "### Images used\n";
                 githubSummary += imagesMd.ToString();
 
-                gitHubApi?.AddComment(repoName!, prNumber,
-                    (anyFailed ? "Builds failed, please check action output." : "All builds OK!") + 
+                var commentTask = gitHubApi?.AddComment(repoName!, prNumber,
+                    (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
                     "\n\n" + buildsMd.ToString());
+
+                if (commentTask != null)
+                    await commentTask;
             }
         }
         finally
