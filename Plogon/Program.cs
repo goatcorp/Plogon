@@ -28,7 +28,7 @@ class Program
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
         
-        var actor = Environment.GetEnvironmentVariable("GITHUB_ACTOR");
+        var actor = Environment.GetEnvironmentVariable("PR_ACTOR");
         var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
 
