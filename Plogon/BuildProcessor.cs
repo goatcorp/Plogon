@@ -129,7 +129,7 @@ public class BuildProcessor
 
     private async Task RestorePackages(BuildTask task, DirectoryInfo workFolder, DirectoryInfo pkgFolder)
     {
-        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath, "packages.lock.json"));
+        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath!, "packages.lock.json"));
 
         if (!lockFile.Exists)
             throw new Exception("Lock file not present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
@@ -259,15 +259,23 @@ public class BuildProcessor
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
         var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
 
-        if (task.Manifest.Plugin.ProjectPath.Contains(".."))
-            throw new Exception("Not allowed");
-        
         Debug.Assert(staticFolder.Exists);
 
+        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
+            throw new Exception("No repository specified");
+        
         if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
             !task.Manifest.Plugin.Repository.EndsWith(".git"))
             throw new Exception("You can only use HTTPS git endpoints for your plugin.");
+
+        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Commit))
+            throw new Exception("No commit specified");
+
+        task.Manifest.Plugin.ProjectPath ??= string.Empty;
         
+        if (task.Manifest.Plugin.ProjectPath.Contains(".."))
+            throw new Exception("Not allowed");
+
         if (!work.Exists || work.GetFiles().Length == 0)
         {
             Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions

@@ -18,7 +18,7 @@ public class Manifest
     
         public string Commit { get; set; }
     
-        public string ProjectPath { get; set; }
+        public string? ProjectPath { get; set; }
     
         public string Changelog { get; set; }
     
