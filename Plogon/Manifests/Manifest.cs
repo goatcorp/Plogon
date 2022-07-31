@@ -21,6 +21,8 @@ public class Manifest
         public string ProjectPath { get; set; }
     
         public string Changelog { get; set; }
+        
+        public string Version { get; set; }
     
         public List<string> Owners { get; set; }
     }

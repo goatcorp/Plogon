@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using LibGit2Sharp;
+using Microsoft.Build.Construction;
 using Newtonsoft.Json;
 using Plogon.Manifests;
 using Plogon.Repo;
@@ -216,6 +217,21 @@ public class BuildProcessor
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
     }
 
+    private string GetVersion(DirectoryInfo workDir, Manifest manifest, string internalName)
+    {
+        if (!string.IsNullOrWhiteSpace(manifest.Plugin.Version)) 
+            return manifest.Plugin.Version;
+
+        var projPath = !string.IsNullOrWhiteSpace(manifest.Plugin.ProjectPath) 
+                ?
+                Path.Combine(workDir.FullName, manifest.Plugin.ProjectPath, $"{internalName}.csproj")
+                :
+                Path.Combine(workDir.FullName, $"{internalName}.csproj");
+        ;
+        var projRootElement = ProjectRootElement.Open(projPath);
+        return projRootElement!.Properties.FirstOrDefault(t => t.Name == "Version")?.Value ?? "1.0.0";
+    }
+
     /// <summary>
     /// Info about build status
     /// </summary>
@@ -306,6 +322,8 @@ public class BuildProcessor
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
         await RestorePackages(task, work, packages);
+
+        var version = GetVersion(work, task.Manifest, task.InternalName);
         
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
@@ -335,6 +353,7 @@ public class BuildProcessor
                     $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
                     $"PLOGON_PLUGIN_NAME={task.InternalName}",
                     $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
+                    $"PLOGON_PLUGIN_VERSION={version}",
                     "DALAMUD_LIB_PATH=/work/dalamud/"
                 },
                 Entrypoint = new List<string>
