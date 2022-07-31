@@ -19,12 +19,8 @@ class Program
     /// <param name="artifactFolder">The folder to store artifacts in.</param>
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
-    /// <param name="actor">Creator of the request.</param>
-    /// <param name="repoName">The name of the acting repository.</param>
-    /// <param name="prNumber">The number of the acting PR.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false,
-        string? actor = null, string? repoName = null, int? prNumber = null)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false)
     {
         SetupLogging();
 
@@ -41,6 +37,10 @@ class Program
             gitHubApi = new GitHubApi(token);
             Log.Verbose("GitHub API OK");
         }
+
+        var actor = Environment.GetEnvironmentVariable("GITHUB_ACTOR");
+        var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
+        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
         
         var aborted = false;
         var anyFailed = false;
@@ -146,9 +146,9 @@ class Program
                 githubSummary += "### Images used\n";
                 githubSummary += imagesMd.ToString();
 
-                if (prNumber.HasValue)
+                if (repoName != null && prNumber != null)
                 {
-                    var commentTask = gitHubApi?.AddComment(repoName!, prNumber.Value,
+                    var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
                         (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
                         "\n\n" + buildsMd.ToString());
 
