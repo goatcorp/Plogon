@@ -2,6 +2,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace Plogon;
 
@@ -52,6 +53,8 @@ public class GitHubApi
         request.Content = JsonContent.Create(jsonBody);
 
         var response = await this.client.SendAsync(request);
+        Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+        
         response.EnsureSuccessStatusCode();
     }
 }
