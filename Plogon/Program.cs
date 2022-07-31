@@ -54,7 +54,7 @@ class Program
             if (!tasks.Any())
             {
                 Log.Information("Nothing to do, goodbye...");
-                githubSummary += "No tasks were detected, this is probably an issue on our side, please report.";
+                githubSummary += "\nNo tasks were detected, if you didn't change any manifests, this is intended.";
             }
             else
             {
@@ -85,7 +85,10 @@ class Program
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
-                        buildsMd.AddRow("👽", task.InternalName, task.Manifest.Plugin.Commit, "Not your plugin");
+                        // Only complain if the last build was less recent, indicates configuration error
+                        if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
+                            buildsMd.AddRow("👽", task.InternalName, task.Manifest.Plugin.Commit, "Not your plugin");
+                        
                         continue;
                     }
                     

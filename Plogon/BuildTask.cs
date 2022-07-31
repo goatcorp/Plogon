@@ -1,4 +1,5 @@
-﻿using Plogon.Manifests;
+﻿using System;
+using Plogon.Manifests;
 #pragma warning disable CS8618
 #pragma warning disable CS1591
 
@@ -9,6 +10,8 @@ public class BuildTask
     public Manifest Manifest { get; set; }
     
     public string? HaveCommit { get; set; }
+    
+    public DateTime? HaveTimeBuilt { get; set; }
     
     public string Channel { get; set; }
     

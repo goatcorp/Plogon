@@ -118,6 +118,7 @@ public class BuildProcessor
                         Manifest = manifest.Value,
                         Channel = channel.Key,
                         HaveCommit = state?.BuiltCommit,
+                        HaveTimeBuilt = state?.TimeBuilt,
                     });
                 }
             }
