@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Docker.DotNet;
 using Docker.DotNet.Models;
 using LibGit2Sharp;
-using Microsoft.Build.Construction;
 using Newtonsoft.Json;
 using Plogon.Manifests;
 using Plogon.Repo;
