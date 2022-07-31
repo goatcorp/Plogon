@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace Plogon;
 
@@ -50,5 +51,6 @@ public class GitHubApi
 
         var response = await this.client.PostAsync($"/repos/{repo}/issues/{issueNumber}/comments", JsonContent.Create(jsonBody));
         response.EnsureSuccessStatusCode();
+        Log.Verbose("Sent comment to PR #{PrNumber} for {RepoName}", issueNumber, repo);
     }
 }

@@ -24,8 +24,7 @@ class Program
     /// <param name="prNumber">The number of the acting PR.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
         DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false,
-        string? actor = null,
-        string? repoName = null, int prNumber = 0)
+        string? actor = null, string? repoName = null, int prNumber = 0)
     {
         SetupLogging();
 
@@ -40,6 +39,7 @@ class Program
                 throw new Exception("GITHUB_TOKEN not set");
             
             gitHubApi = new GitHubApi(token);
+            Log.Verbose("GitHub API OK");
         }
         
         var aborted = false;
