@@ -20,13 +20,27 @@ class Program
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
     /// <param name="actor">Creator of the request.</param>
+    /// <param name="repoName">The name of the acting repository.</param>
+    /// <param name="prNumber">The number of the acting PR.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, string? actor = null)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false,
+        string? actor = null,
+        string? repoName = null, int prNumber = 0)
     {
         SetupLogging();
 
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
+
+        GitHubApi? gitHubApi = null;
+        if (ci)
+        {
+            var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+            if (string.IsNullOrEmpty(token))
+                throw new Exception("GITHUB_TOKEN not set");
+            
+            gitHubApi = new GitHubApi(token);
+        }
         
         var aborted = false;
         var anyFailed = false;
@@ -131,6 +145,10 @@ class Program
 
                 githubSummary += "### Images used\n";
                 githubSummary += imagesMd.ToString();
+
+                gitHubApi?.AddComment(repoName!, prNumber,
+                    (anyFailed ? "Builds failed, please check action output." : "All builds OK!") + 
+                    "\n\n" + buildsMd.ToString());
             }
         }
         finally
