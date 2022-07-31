@@ -26,6 +26,7 @@ public class GitHubApi
             DefaultRequestHeaders =
             {
                 Accept = {new MediaTypeWithQualityHeaderValue("application/vnd.github+json")},
+                UserAgent = { new ProductInfoHeaderValue("PlogonBuild", "1.0.0") }
             }
         };
     }
