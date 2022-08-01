@@ -227,10 +227,12 @@ public class BuildProcessor
         /// </summary>
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
-        public BuildResult(bool success, string diffUrl)
+        /// <param name="version">plugin version</param>
+        public BuildResult(bool success, string diffUrl, string? version)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
+            this.Version = version;
         }
         
         /// <summary>
@@ -242,6 +244,17 @@ public class BuildProcessor
         /// Where the diff is
         /// </summary>
         public string DiffUrl { get; private set; }
+
+        /// <summary>
+        /// The version of the plugin artifact
+        /// </summary>
+        public string? Version { get; private set; }
+    }
+
+    private class LegacyPluginManifest
+    {
+        [JsonProperty]
+        public string? AssemblyVersion { get; set; }
     }
     
     /// <summary>
@@ -405,6 +418,7 @@ public class BuildProcessor
             });
 
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
+        string? version = null;
 
         if (dpOutput.Exists)
         {
@@ -420,6 +434,27 @@ public class BuildProcessor
             {
                 Log.Error(ex, "Could not copy to artifact output");
                 throw new Exception("Could not copy to artifact", ex);
+            }
+
+            try
+            {
+                var manifestFile = new FileInfo(Path.Combine(dpOutput.FullName, $"{task.InternalName}.json"));
+                if (!manifestFile.Exists)
+                    throw new Exception("Generated manifest didn't exist");
+
+                var manifestText = await manifestFile.OpenText().ReadToEndAsync();
+                var manifest = JsonConvert.DeserializeObject<LegacyPluginManifest>(manifestText);
+
+                if (manifest == null)
+                    throw new Exception("Generated manifest was null");
+
+                version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Couldn't read generated manifest");
+                if (exitCode == 0)
+                    throw;
             }
 
             if (exitCode == 0 && commit)
@@ -443,10 +478,10 @@ public class BuildProcessor
         }
         else if (exitCode == 0)
         {
-            throw new Exception("DalamudPackager output not found?");
+            throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl);
+        return new BuildResult(exitCode == 0, diffUrl, version);
     }
 
     /// <summary>

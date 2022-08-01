@@ -114,7 +114,7 @@ class Program
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl);
                             
-                            buildsMd.AddRow("✔️", task.InternalName, task.Manifest.Plugin.Commit, $"[Diff]({status.DiffUrl})");
+                            buildsMd.AddRow("✔️", task.InternalName, task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
                         }
                         else
                         {
