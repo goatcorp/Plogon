@@ -116,7 +116,7 @@ class Program
 
                             if (status.Version == task.HaveVersion && task.HaveVersion != null)
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Same version!!!\nv{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
