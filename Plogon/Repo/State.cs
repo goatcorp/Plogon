@@ -26,6 +26,7 @@ public class State
         {
             public string BuiltCommit { get; set; }
             public DateTime TimeBuilt { get; set; }
+            public string EffectiveVersion { get; set; }
         }
         
         public IDictionary<string, PluginState> Plugins { get; set; }

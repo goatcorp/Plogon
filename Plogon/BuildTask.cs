@@ -13,6 +13,8 @@ public class BuildTask
     
     public DateTime? HaveTimeBuilt { get; set; }
     
+    public string? HaveVersion { get; set; }
+    
     public string Channel { get; set; }
     
     public string InternalName { get; set; }

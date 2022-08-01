@@ -113,8 +113,15 @@ class Program
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl);
-                            
-                            buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
+
+                            if (status.Version == task.HaveVersion && task.HaveVersion != null)
+                            {
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Same version!!!\nv{status.Version} - [Diff]({status.DiffUrl})");
+                            }
+                            else
+                            {
+                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
+                            }
                         }
                         else
                         {

@@ -119,6 +119,7 @@ public class BuildProcessor
                         Channel = channel.Key,
                         HaveCommit = state?.BuiltCommit,
                         HaveTimeBuilt = state?.TimeBuilt,
+                        HaveVersion = state?.EffectiveVersion,
                     });
                 }
             }
@@ -461,7 +462,7 @@ public class BuildProcessor
             {
                 try
                 {
-                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);
+                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!);
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
                     foreach (var file in dpOutput.GetFiles())
