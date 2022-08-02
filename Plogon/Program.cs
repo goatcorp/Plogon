@@ -87,7 +87,7 @@ class Program
 
                         // Only complain if the last build was less recent, indicates configuration error
                         if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
-                            buildsMd.AddRow("👽", task.InternalName, task.Manifest.Plugin.Commit, "Not your plugin");
+                            buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not your plugin");
                         
                         continue;
                     }
@@ -98,7 +98,7 @@ class Program
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
-                        buildsMd.AddRow("❔", task.InternalName, task.Manifest.Plugin.Commit, "Not ran");
+                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not ran");
                         continue;
                     }
                     
@@ -128,7 +128,7 @@ class Program
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
                                 task.Manifest.Plugin.Commit);
                             
-                            buildsMd.AddRow("❌", task.InternalName, task.Manifest.Plugin.Commit, $"Build failed ([Diff]({status.DiffUrl}))");
+                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Build failed ([Diff]({status.DiffUrl}))");
                             anyFailed = true;
                         }
                     }
@@ -138,14 +138,14 @@ class Program
                         // Need to abort.
                         
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
-                        buildsMd.AddRow("⁉️", task.InternalName, task.Manifest.Plugin.Commit, "Could not commit to repo");
+                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
-                        buildsMd.AddRow("😰", task.InternalName, task.Manifest.Plugin.Commit, $"Build system error: {ex.Message}");
+                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 

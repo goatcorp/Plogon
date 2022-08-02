@@ -161,7 +161,7 @@ public class BuildProcessor
             await File.WriteAllBytesAsync(Path.Combine(pkgFolder.FullName, fileName), data);
         }
         
-        foreach (var dependency in runtime.Value)
+        foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
         {
             await GetDep(dependency.Key, dependency.Value);
         }
