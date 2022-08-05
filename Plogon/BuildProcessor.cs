@@ -12,6 +12,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using LibGit2Sharp;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Plogon.Manifests;
 using Plogon.Repo;
 using Serilog;
@@ -469,6 +470,16 @@ public class BuildProcessor
                     {
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
+
+                    // DELETE THIS!!
+                    var manifestFile = new FileInfo(Path.Combine(repoOutputDir.FullName, $"{task.InternalName}.json"));
+                    var manifestText = await File.ReadAllTextAsync(manifestFile.FullName);
+                    
+                    var manifestObj = JObject.Parse(manifestText);
+                    manifestObj["_isDip17Plugin"] = true;
+                    manifestObj["_Dip17Channel"] = task.Channel;
+                    
+                    await File.WriteAllTextAsync(manifestFile.FullName, manifestObj.ToString());
                 }
                 catch (Exception ex)
                 {
