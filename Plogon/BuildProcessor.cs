@@ -118,6 +118,8 @@ public class BuildProcessor
                         Manifest = manifest.Value,
                         Channel = channel.Key,
                         HaveCommit = state?.BuiltCommit,
+                        HaveTimeBuilt = state?.TimeBuilt,
+                        HaveVersion = state?.EffectiveVersion,
                     });
                 }
             }
@@ -128,7 +130,7 @@ public class BuildProcessor
 
     private async Task RestorePackages(BuildTask task, DirectoryInfo workFolder, DirectoryInfo pkgFolder)
     {
-        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath, "packages.lock.json"));
+        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath!, "packages.lock.json"));
 
         if (!lockFile.Exists)
             throw new Exception("Lock file not present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
@@ -159,7 +161,7 @@ public class BuildProcessor
             await File.WriteAllBytesAsync(Path.Combine(pkgFolder.FullName, fileName), data);
         }
         
-        foreach (var dependency in runtime.Value)
+        foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
         {
             await GetDep(dependency.Key, dependency.Value);
         }
@@ -226,10 +228,12 @@ public class BuildProcessor
         /// </summary>
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
-        public BuildResult(bool success, string diffUrl)
+        /// <param name="version">plugin version</param>
+        public BuildResult(bool success, string diffUrl, string? version)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
+            this.Version = version;
         }
         
         /// <summary>
@@ -241,6 +245,17 @@ public class BuildProcessor
         /// Where the diff is
         /// </summary>
         public string DiffUrl { get; private set; }
+
+        /// <summary>
+        /// The version of the plugin artifact
+        /// </summary>
+        public string? Version { get; private set; }
+    }
+
+    private class LegacyPluginManifest
+    {
+        [JsonProperty]
+        public string? AssemblyVersion { get; set; }
     }
     
     /// <summary>
@@ -258,11 +273,23 @@ public class BuildProcessor
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
         var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
 
+        Debug.Assert(staticFolder.Exists);
+
+        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
+            throw new Exception("No repository specified");
+        
+        if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
+            !task.Manifest.Plugin.Repository.EndsWith(".git"))
+            throw new Exception("You can only use HTTPS git endpoints for your plugin.");
+
+        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Commit))
+            throw new Exception("No commit specified");
+
+        task.Manifest.Plugin.ProjectPath ??= string.Empty;
+        
         if (task.Manifest.Plugin.ProjectPath.Contains(".."))
             throw new Exception("Not allowed");
-        
-        Debug.Assert(staticFolder.Exists);
-        
+
         if (!work.Exists || work.GetFiles().Length == 0)
         {
             Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
@@ -393,6 +420,7 @@ public class BuildProcessor
             });
 
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
+        string? version = null;
 
         if (dpOutput.Exists)
         {
@@ -410,11 +438,32 @@ public class BuildProcessor
                 throw new Exception("Could not copy to artifact", ex);
             }
 
+            try
+            {
+                var manifestFile = new FileInfo(Path.Combine(dpOutput.FullName, $"{task.InternalName}.json"));
+                if (!manifestFile.Exists)
+                    throw new Exception("Generated manifest didn't exist");
+
+                var manifestText = await manifestFile.OpenText().ReadToEndAsync();
+                var manifest = JsonConvert.DeserializeObject<LegacyPluginManifest>(manifestText);
+
+                if (manifest == null)
+                    throw new Exception("Generated manifest was null");
+
+                version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Couldn't read generated manifest");
+                if (exitCode == 0)
+                    throw;
+            }
+
             if (exitCode == 0 && commit)
             {
                 try
                 {
-                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit);
+                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!);
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
                     foreach (var file in dpOutput.GetFiles())
@@ -431,10 +480,10 @@ public class BuildProcessor
         }
         else if (exitCode == 0)
         {
-            throw new Exception("DalamudPackager output not found?");
+            throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl);
+        return new BuildResult(exitCode == 0, diffUrl, version);
     }
 
     /// <summary>

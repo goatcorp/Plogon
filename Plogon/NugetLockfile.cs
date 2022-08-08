@@ -27,7 +27,8 @@ public class NugetLockfile
         public enum DependencyType
         {
             Direct,
-            Transitive
+            Transitive,
+            Project,
         }
     }
 }

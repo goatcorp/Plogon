@@ -53,7 +53,7 @@ public class GitHubApi
         request.Content = JsonContent.Create(jsonBody);
 
         var response = await this.client.SendAsync(request);
-        Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+        //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
         
         response.EnsureSuccessStatusCode();
     }
