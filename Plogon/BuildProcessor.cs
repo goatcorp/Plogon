@@ -375,6 +375,7 @@ public class BuildProcessor
                     $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
                     $"PLOGON_PLUGIN_NAME={task.InternalName}",
                     $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
+                    $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
                     "DALAMUD_LIB_PATH=/work/dalamud/"
                 },
                 Entrypoint = new List<string>
