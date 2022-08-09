@@ -128,14 +128,29 @@ public class BuildProcessor
 
         return tasks;
     }
-
-    private async Task RestorePackages(BuildTask task, DirectoryInfo workFolder, DirectoryInfo pkgFolder)
+    
+    async Task GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
     {
-        var lockFile = new FileInfo(Path.Combine(workFolder.FullName, task.Manifest.Plugin.ProjectPath!, "packages.lock.json"));
+        var pkgName = name.ToLower();
+        var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
+        var depPath = Path.Combine(pkgFolder.FullName, fileName);
+        
+        if (File.Exists(depPath))
+            return;
+        
+        Log.Information("   => Getting {DepName}(v{Version})", name, dependency.Resolved);
+        var url =
+            $"https://api.nuget.org/v3-flatcontainer/{pkgName}/{dependency.Resolved}/{fileName}";
 
-        if (!lockFile.Exists)
-            throw new Exception("Lock file not present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+        var data = await client.GetByteArrayAsync(url);
+            
+        // TODO: verify content hash
+            
+        await File.WriteAllBytesAsync(depPath, data);
+    }
 
+    private async Task RestorePackages(DirectoryInfo pkgFolder, FileInfo lockFile, HttpClient client)
+    {
         var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(lockFile.FullName));
 
         if (lockFileData.Version != 1)
@@ -144,38 +159,35 @@ public class BuildProcessor
         var runtime = lockFileData.Runtimes.First();
         Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
 
-        using var client = new HttpClient();
-
-        async Task GetDep(string name, NugetLockfile.Dependency dependency)
-        {
-            Log.Information("   => Getting {DepName}(v{Version})", name, dependency.Resolved);
-
-            var pkgName = name.ToLower();
-            var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
-            var url =
-                $"https://api.nuget.org/v3-flatcontainer/{pkgName}/{dependency.Resolved}/{fileName}";
-
-            var data = await client.GetByteArrayAsync(url);
-            
-            // TODO: verify content hash
-            
-            await File.WriteAllBytesAsync(Path.Combine(pkgFolder.FullName, fileName), data);
-        }
-        
         foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
         {
-            await GetDep(dependency.Key, dependency.Value);
+            await GetDependency(dependency.Key, dependency.Value, pkgFolder, client);
+        }
+    }
+
+    private async Task RestoreAllPackages(BuildTask task, DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder)
+    {
+        var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
+        
+        if (lockFiles.Length == 0)
+            throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+
+        using var client = new HttpClient();
+        
+        foreach (var file in lockFiles)
+        {
+            await RestorePackages(pkgFolder, file, client);
         }
 
-        await GetDep("Microsoft.NETCore.App.Ref", new NugetLockfile.Dependency()
+        await GetDependency("Microsoft.NETCore.App.Ref", new NugetLockfile.Dependency()
         {
             Resolved = "5.0.0"
-        });
+        }, pkgFolder, client);
         
-        await GetDep("Microsoft.AspNetCore.App.Ref", new NugetLockfile.Dependency()
+        await GetDependency("Microsoft.AspNetCore.App.Ref", new NugetLockfile.Dependency()
         {
             Resolved = "5.0.0"
-        });
+        }, pkgFolder, client);
     }
 
     private class HasteResponse
@@ -333,7 +345,7 @@ public class BuildProcessor
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
-        await RestorePackages(task, work, packages);
+        await RestoreAllPackages(task, work, packages);
         
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
