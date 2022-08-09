@@ -26,6 +26,11 @@ public class MarkdownTableBuilder
     }
 
     public override string ToString() {
+        if (rows.Count == 1)
+        {
+            return rows.First().Aggregate((current, col) => current + $"{col} - ")[..^3];
+        }
+        
         var output = "|";
         foreach (var col in cols) output += $"{col}|";
         output += "\n|";
