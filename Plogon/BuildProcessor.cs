@@ -39,6 +39,17 @@ public class BuildProcessor
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
+    // This has to match the SDK's version identified by DOCKER_TAG
+    // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
+    private const string RUNTIME_VERSION = "6.0.5";
+    // Additional runtime packages that will be fetched for every build
+    private readonly string[] RUNTIME_PACKAGES = { 
+        "Microsoft.NETCore.App.Ref",
+        "Microsoft.AspNetCore.App.Ref",
+        "Microsoft.NETCore.App.Runtime.win-x64",
+        "Microsoft.AspNetCore.App.Runtime.win-x64",
+        "Microsoft.NETCore.App.Host.win-x64" 
+    };
 
     /// <summary>
     /// Set up build processor
@@ -156,12 +167,13 @@ public class BuildProcessor
         if (lockFileData.Version != 1)
             throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
 
-        var runtime = lockFileData.Runtimes.First();
-        Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
-
-        foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
+        foreach (var runtime in lockFileData.Runtimes)
         {
-            await GetDependency(dependency.Key, dependency.Value, pkgFolder, client);
+            Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
+            
+            await Task.WhenAll(runtime.Value
+                .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
+                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder,client)).ToList());
         }
     }
 
@@ -171,23 +183,17 @@ public class BuildProcessor
         
         if (lockFiles.Length == 0)
             throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
-
-        using var client = new HttpClient();
         
+        using var client = new HttpClient();
+
         foreach (var file in lockFiles)
         {
             await RestorePackages(pkgFolder, file, client);
         }
-
-        await GetDependency("Microsoft.NETCore.App.Ref", new NugetLockfile.Dependency()
-        {
-            Resolved = "5.0.0"
-        }, pkgFolder, client);
         
-        await GetDependency("Microsoft.AspNetCore.App.Ref", new NugetLockfile.Dependency()
-        {
-            Resolved = "5.0.0"
-        }, pkgFolder, client);
+        // fetch runtime packages
+        var runtimeDependency = new NugetLockfile.Dependency() { Resolved = RUNTIME_VERSION };
+        await Task.WhenAll(RUNTIME_PACKAGES.Select(packageName => GetDependency(packageName, runtimeDependency, pkgFolder, client)));
     }
 
     private class HasteResponse
