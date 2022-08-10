@@ -39,6 +39,9 @@ public class BuildProcessor
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
+    // This has to match the SDK's version identified by DOCKER_TAG
+    // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
+    private const string RUNTIME_VERSION = "6.0.5";
 
     /// <summary>
     /// Set up build processor
@@ -156,12 +159,14 @@ public class BuildProcessor
         if (lockFileData.Version != 1)
             throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
 
-        var runtime = lockFileData.Runtimes.First();
-        Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
-
-        foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
+        foreach (var runtime in lockFileData.Runtimes)
         {
-            await GetDependency(dependency.Key, dependency.Value, pkgFolder, client);
+            Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
+
+            foreach (var dependency in runtime.Value.Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project))
+            {
+                await GetDependency(dependency.Key, dependency.Value, pkgFolder, client);
+            }
         }
     }
 
@@ -181,12 +186,27 @@ public class BuildProcessor
 
         await GetDependency("Microsoft.NETCore.App.Ref", new NugetLockfile.Dependency()
         {
-            Resolved = "5.0.0"
+            Resolved = RUNTIME_VERSION
         }, pkgFolder, client);
         
         await GetDependency("Microsoft.AspNetCore.App.Ref", new NugetLockfile.Dependency()
         {
-            Resolved = "5.0.0"
+            Resolved = RUNTIME_VERSION
+        }, pkgFolder, client);
+        
+        await GetDependency("Microsoft.NETCore.App.Runtime.win-x64", new NugetLockfile.Dependency()
+        {
+            Resolved = RUNTIME_VERSION
+        }, pkgFolder, client);
+        
+        await GetDependency("Microsoft.AspNetCore.App.Runtime.win-x64", new NugetLockfile.Dependency()
+        {
+            Resolved = RUNTIME_VERSION
+        }, pkgFolder, client);
+        
+        await GetDependency("Microsoft.NETCore.App.Host.win-x64", new NugetLockfile.Dependency()
+        {
+            Resolved = RUNTIME_VERSION
         }, pkgFolder, client);
     }
 
