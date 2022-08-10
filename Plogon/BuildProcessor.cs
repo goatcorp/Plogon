@@ -160,7 +160,7 @@ public class BuildProcessor
         await File.WriteAllBytesAsync(depPath, data);
     }
 
-    private async Task RestorePackages(DirectoryInfo pkgFolder, FileInfo lockFile)
+    private async Task RestorePackages(DirectoryInfo pkgFolder, FileInfo lockFile, HttpClient client)
     {
         var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(lockFile.FullName));
 
@@ -173,7 +173,7 @@ public class BuildProcessor
             
             await Task.WhenAll(runtime.Value
                 .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
-                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder, new HttpClient())).ToList());
+                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder,client)).ToList());
         }
     }
 
@@ -183,15 +183,17 @@ public class BuildProcessor
         
         if (lockFiles.Length == 0)
             throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+        
+        using var client = new HttpClient();
 
         foreach (var file in lockFiles)
         {
-            await RestorePackages(pkgFolder, file);
+            await RestorePackages(pkgFolder, file, client);
         }
         
         // fetch runtime packages
         var runtimeDependency = new NugetLockfile.Dependency() { Resolved = RUNTIME_VERSION };
-        await Task.WhenAll(RUNTIME_PACKAGES.Select(packageName => GetDependency(packageName, runtimeDependency, pkgFolder, new HttpClient())));
+        await Task.WhenAll(RUNTIME_PACKAGES.Select(packageName => GetDependency(packageName, runtimeDependency, pkgFolder, client)));
     }
 
     private class HasteResponse
