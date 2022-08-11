@@ -42,14 +42,6 @@ public class BuildProcessor
     // This has to match the SDK's version identified by DOCKER_TAG
     // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
     private const string RUNTIME_VERSION = "6.0.5";
-    // Additional runtime packages that will be fetched for every build
-    private readonly string[] RUNTIME_PACKAGES = { 
-        "Microsoft.NETCore.App.Ref",
-        "Microsoft.AspNetCore.App.Ref",
-        "Microsoft.NETCore.App.Runtime.win-x64",
-        "Microsoft.AspNetCore.App.Runtime.win-x64",
-        "Microsoft.NETCore.App.Host.win-x64" 
-    };
 
     /// <summary>
     /// Set up build processor
@@ -160,13 +152,8 @@ public class BuildProcessor
         await File.WriteAllBytesAsync(depPath, data);
     }
 
-    private async Task RestorePackages(DirectoryInfo pkgFolder, FileInfo lockFile, HttpClient client)
+    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client)
     {
-        var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(lockFile.FullName));
-
-        if (lockFileData.Version != 1)
-            throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
-
         foreach (var runtime in lockFileData.Runtimes)
         {
             Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
@@ -186,14 +173,21 @@ public class BuildProcessor
         
         using var client = new HttpClient();
 
+        HashSet<Tuple<string, string>> runtimeDependencies = new();
         foreach (var file in lockFiles)
         {
-            await RestorePackages(pkgFolder, file, client);
+            var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(file.FullName));
+
+            if (lockFileData.Version != 1)
+                throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
+
+            runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
+            
+            await RestorePackages(pkgFolder, lockFileData, client);
         }
         
         // fetch runtime packages
-        var runtimeDependency = new NugetLockfile.Dependency() { Resolved = RUNTIME_VERSION };
-        await Task.WhenAll(RUNTIME_PACKAGES.Select(packageName => GetDependency(packageName, runtimeDependency, pkgFolder, client)));
+        await Task.WhenAll(runtimeDependencies.Select(dependency => GetDependency(dependency.Item1, new() { Resolved = dependency.Item2 }, pkgFolder, client)));
     }
 
     private class HasteResponse
@@ -235,6 +229,41 @@ public class BuildProcessor
         var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
 
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+    }
+
+    HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
+    {
+        HashSet<Tuple<string, string>> dependencies = new();
+
+        foreach (var runtime in lockFileData.Runtimes)
+        {
+            // check if framework identifier also specifies a runtime identifier
+            var runtimeId = runtime.Key.Split('/').Skip(1).FirstOrDefault();
+            
+            var version = runtime.Key[..6] switch
+            {
+                "net5.0" => "5.0.0",
+                "net6.0" when runtimeId is null => "6.0.0",
+                "net6.0" => RUNTIME_VERSION, // if RUNTIME_VERSION doesn't match SDKs runtime version build will fail later on
+                _ => throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}")
+            };
+
+            if (runtimeId is null)
+            {
+                // only generic reference packages are required
+                dependencies.Add(new("Microsoft.NETCore.App.Ref", version));
+                dependencies.Add(new ("Microsoft.AspNetCore.App.Ref", version));
+            }
+            else
+            {
+                // specific runtime packages are required
+                dependencies.Add(new($"Microsoft.NETCore.App.Runtime.{runtimeId}", version));
+                dependencies.Add(new ($"Microsoft.AspNetCore.App.Runtime.{runtimeId}", version));
+                dependencies.Add(new ($"Microsoft.NETCore.App.Host.{runtimeId}", version));
+            }
+        }
+
+        return dependencies;
     }
 
     /// <summary>
