@@ -160,7 +160,7 @@ class Program
                 if (repoName != null && prNumber != null)
                 {
                     var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
-                    var links = $"\n\n### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+                    var links = $"\n\n##### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
                     
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
                         (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
