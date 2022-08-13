@@ -1,7 +1,10 @@
-﻿using System.Net.Http;
+﻿using System;
+using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Transactions;
 using Serilog;
 
 namespace Plogon;
@@ -56,5 +59,33 @@ public class GitHubApi
         //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
         
         response.EnsureSuccessStatusCode();
+    }
+
+    private class IssueResponse
+    {
+        [JsonPropertyName("body")] public string? Body { get; } = null!;
+    }
+
+    /// <summary>
+    /// Get the body of an issue.
+    /// </summary>
+    /// <param name="repo">Repo name</param>
+    /// <param name="issueNumber">Issue number</param>
+    /// <returns>PR body</returns>
+    /// <exception cref="Exception">Thrown when the body couldn't be read</exception>
+    public async Task<string> GetIssueBody(string repo, int issueNumber)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.github.com/repos/{repo}/issues/{issueNumber}");
+        var response = await this.client.SendAsync(request);
+        //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+        
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<IssueResponse>();
+        if (body?.Body == null)
+            throw new Exception("Couldn't read issue body.");
+
+        return body.Body;
     }
 }

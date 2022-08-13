@@ -107,7 +107,14 @@ class Program
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
-                        var status = await buildProcessor.ProcessTask(task, commit);
+
+                        var changelog = task.Manifest.Plugin.Changelog;
+                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null && gitHubApi != null && commit)
+                        {
+                            changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
+                        }
+                        
+                        var status = await buildProcessor.ProcessTask(task, commit, changelog);
 
                         if (status.Success)
                         {
