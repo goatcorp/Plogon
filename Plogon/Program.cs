@@ -107,7 +107,14 @@ class Program
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
-                        var status = await buildProcessor.ProcessTask(task, commit);
+
+                        var changelog = task.Manifest.Plugin.Changelog;
+                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null && gitHubApi != null && commit)
+                        {
+                            changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
+                        }
+                        
+                        var status = await buildProcessor.ProcessTask(task, commit, changelog);
 
                         if (status.Success)
                         {
@@ -159,9 +166,12 @@ class Program
 
                 if (repoName != null && prNumber != null)
                 {
+                    var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+                    var links = $"\n\n##### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+                    
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
                         (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
-                        "\n\n" + buildsMd.ToString());
+                        "\n\n" + buildsMd.ToString() + links);
 
                     if (commentTask != null)
                         await commentTask;

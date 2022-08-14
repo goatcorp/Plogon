@@ -311,10 +311,11 @@ public class BuildProcessor
     /// </summary>
     /// <param name="task">The task to build</param>
     /// <param name="commit">Whether or not the plugin should be committed to the repo</param>
+    /// <param name="changelog">The plugin changelog</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string changelog)
     {
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
@@ -511,7 +512,7 @@ public class BuildProcessor
             {
                 try
                 {
-                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!);
+                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!, changelog);
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
                     foreach (var file in dpOutput.GetFiles())
