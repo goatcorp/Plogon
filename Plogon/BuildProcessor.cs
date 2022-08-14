@@ -51,8 +51,9 @@ public class BuildProcessor
     /// <param name="workFolder">Work</param>
     /// <param name="staticFolder">Static</param>
     /// <param name="artifactFolder">Artifacts</param>
+    /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR</param>
     public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, string? prDiff)
     {
         this.repoFolder = repoFolder;
         this.manifestFolder = manifestFolder;
@@ -61,7 +62,7 @@ public class BuildProcessor
         this.artifactFolder = artifactFolder;
 
         this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder);
+        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff);
         this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
