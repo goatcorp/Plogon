@@ -329,7 +329,7 @@ public class BuildProcessor
         
         if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
             !task.Manifest.Plugin.Repository.EndsWith(".git"))
-            throw new Exception("You can only use HTTPS git endpoints for your plugin.");
+            throw new Exception("Only HTTPS repository URLs ending in .git are supported");
 
         if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Commit))
             throw new Exception("No commit specified");
