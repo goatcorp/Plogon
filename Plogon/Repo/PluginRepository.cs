@@ -14,6 +14,9 @@ public class PluginRepository
     private readonly DirectoryInfo repoDirectory;
     private FileInfo StateFile => new FileInfo(Path.Combine(repoDirectory.FullName, "State.toml"));
 
+    /// <summary>
+    /// Current state of the repository
+    /// </summary>
     public State State { get; private set; }
     
     /// <summary>
@@ -95,7 +98,7 @@ public class PluginRepository
     /// <param name="haveCommit">Commit that is now have</param>
     /// <param name="effectiveVersion">New version of the plugin</param>
     /// <param name="changelog">Plugin changelog</param>
-    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string changelog)
+    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? changelog)
     {
         if (!this.State.Channels.ContainsKey(channelName))
         {
