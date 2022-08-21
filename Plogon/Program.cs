@@ -89,9 +89,12 @@ class Program
                     {
                         if (task.Type == BuildTask.TaskType.Remove)
                         {
-                            GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
+                            if (!commit)
+                                continue;
                             
+                            GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
+
                             var removeStatus = await buildProcessor.ProcessTask(task, commit, null);
 
                             if (removeStatus.Success)

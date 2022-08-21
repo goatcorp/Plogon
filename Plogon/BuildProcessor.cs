@@ -336,8 +336,11 @@ public class BuildProcessor
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
     public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog)
     {
-        if (task.Type == BuildTask.TaskType.Remove && commit)
+        if (task.Type == BuildTask.TaskType.Remove)
         {
+            if (!commit)
+                throw new Exception("Can't remove plugins if not committing");
+            
             this.pluginRepository.RemovePlugin(task.Channel, task.InternalName);
             
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
