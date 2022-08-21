@@ -99,11 +99,11 @@ class Program
 
                             if (removeStatus.Success)
                             {
-                                buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "-", "Removed");
+                                buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "n/a", "Removed");
                             }
                             else
                             {
-                                buildsMd.AddRow("🚯", $"{task.InternalName} [{task.Channel}]", "-", "Removal failed");
+                                buildsMd.AddRow("🚯", $"{task.InternalName} [{task.Channel}]", "n/a", "Removal failed");
                             }
                             
                             GitHubOutputBuilder.EndGroup();
