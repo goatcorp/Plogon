@@ -43,7 +43,9 @@ public class ManifestStorage
             try
             {
                 var tomlText = manifestDir.GetFiles("*.toml").First().OpenText().ReadToEnd();
-                manifests.Add(manifestDir.Name, Toml.ToModel<Manifest>(tomlText));
+                var manifest = Toml.ToModel<Manifest>(tomlText);
+                manifest.Directory = manifestDir;
+                manifests.Add(manifestDir.Name, manifest);
             }
             catch (Exception ex)
             {

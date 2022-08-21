@@ -520,6 +520,15 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
+                    var imagesSourcePath = Path.Combine(task.Manifest.Directory.FullName, "images");
+                    if (Directory.Exists(imagesSourcePath)) 
+                    {
+                        var imagesDestinationPath = Path.Combine(repoOutputDir.FullName, "images");
+                        if (Directory.Exists(imagesDestinationPath))
+                            Directory.Delete(imagesDestinationPath, true);
+                        Directory.Move(imagesSourcePath, imagesDestinationPath);
+                    }
+
                     // DELETE THIS!!
                     var manifestFile = new FileInfo(Path.Combine(repoOutputDir.FullName, $"{task.InternalName}.json"));
                     var manifestText = await File.ReadAllTextAsync(manifestFile.FullName);
