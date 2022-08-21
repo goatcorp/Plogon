@@ -75,9 +75,7 @@ public class BuildProcessor
     {
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
             {
-                //FromImage = "fedora/memcached",
                 FromImage = DOCKER_IMAGE,
-                //FromSrc = DOCKER_REPO,
                 Tag = DOCKER_TAG,
             }, null,
             new Progress<JSONMessage>(progress =>
@@ -104,9 +102,29 @@ public class BuildProcessor
     /// Get all tasks that need to be done
     /// </summary>
     /// <returns>A set of tasks that are pending</returns>
-    public ISet<BuildTask> GetTasks()
+    public ISet<BuildTask> GetBuildTasks()
     {
         var tasks = new HashSet<BuildTask>();
+
+        foreach (var channel in this.pluginRepository.State.Channels)
+        {
+            foreach (var plugin in channel.Value.Plugins)
+            {
+                if (this.manifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
+                {
+                    tasks.Add(new BuildTask
+                    {
+                        InternalName = plugin.Key,
+                        Manifest = null,
+                        Channel = channel.Key,
+                        HaveCommit = null,
+                        HaveTimeBuilt = null,
+                        HaveVersion = null,
+                        Type = BuildTask.TaskType.Remove,
+                    });
+                }
+            }
+        }
 
         foreach (var channel in this.manifestStorage.Channels)
         {
@@ -124,6 +142,7 @@ public class BuildProcessor
                         HaveCommit = state?.BuiltCommit,
                         HaveTimeBuilt = state?.TimeBuilt,
                         HaveVersion = state?.EffectiveVersion,
+                        Type = BuildTask.TaskType.Build,
                     });
                 }
             }
@@ -131,7 +150,7 @@ public class BuildProcessor
 
         return tasks;
     }
-    
+
     async Task GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
     {
         var pkgName = name.ToLower();
@@ -277,7 +296,7 @@ public class BuildProcessor
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
         /// <param name="version">plugin version</param>
-        public BuildResult(bool success, string diffUrl, string? version)
+        public BuildResult(bool success, string? diffUrl, string? version)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
@@ -292,7 +311,7 @@ public class BuildProcessor
         /// <summary>
         /// Where the diff is
         /// </summary>
-        public string DiffUrl { get; private set; }
+        public string? DiffUrl { get; private set; }
 
         /// <summary>
         /// The version of the plugin artifact
@@ -315,8 +334,21 @@ public class BuildProcessor
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string changelog)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog)
     {
+        if (task.Type == BuildTask.TaskType.Remove && commit)
+        {
+            this.pluginRepository.RemovePlugin(task.Channel, task.InternalName);
+            
+            var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
+            repoOutputDir.Delete(true);
+
+            return new BuildResult(true, null, null);
+        }
+
+        if (task.Manifest == null)
+            throw new Exception("Manifest was null");
+        
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
@@ -345,22 +377,12 @@ public class BuildProcessor
             {
                 Checkout = false,
                 RecurseSubmodules = false,
-                OnProgress = output =>
-                {
-                    Log.Verbose("Cloning: {GitOutput}", output);
-                    return true;
-                }
             });
         }
 
         var repo = new Repository(work.FullName);
         Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
-            OnProgress = output =>
-            {
-                Log.Verbose("Fetching: {GitOutput}", output);
-                return true;
-            }
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
 
@@ -369,11 +391,6 @@ public class BuildProcessor
             repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
             {
                 Init = true,
-                OnProgress = output =>
-                {
-                    Log.Verbose("Updating submodule {ModuleName}: {GitOutput}", submodule.Name, output);
-                    return true;
-                }
             });
         }
         

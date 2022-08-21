@@ -14,7 +14,7 @@ public class PluginRepository
     private readonly DirectoryInfo repoDirectory;
     private FileInfo StateFile => new FileInfo(Path.Combine(repoDirectory.FullName, "State.toml"));
 
-    private State state;
+    public State State { get; private set; }
     
     /// <summary>
     /// Initializes a new instance of the <see cref="PluginRepository"/> class.
@@ -26,11 +26,11 @@ public class PluginRepository
         
         if (StateFile.Exists)
         {
-            this.state = Toml.ToModel<State>(StateFile.OpenText().ReadToEnd());
+            this.State = Toml.ToModel<State>(StateFile.OpenText().ReadToEnd());
         }
         else
         {
-            this.state = new State();
+            this.State = new State();
             Log.Information("State for repo at {repo} does not exist, creating new one", repoDirectory.FullName);
         }
         
@@ -39,7 +39,7 @@ public class PluginRepository
 
     private void SaveState()
     {
-        File.WriteAllText(this.StateFile.FullName, Toml.FromModel(this.state));
+        File.WriteAllText(this.StateFile.FullName, Toml.FromModel(this.State));
     }
 
     /// <summary>
@@ -61,12 +61,12 @@ public class PluginRepository
     /// <returns>The state of the plugin, or null if not present</returns>
     public State.Channel.PluginState? GetPluginState(string channelName, string plugin)
     {
-        if (!this.state.Channels.ContainsKey(channelName))
+        if (!this.State.Channels.ContainsKey(channelName))
         {
             return null;
         }
         
-        var channel = this.state.Channels[channelName];
+        var channel = this.State.Channels[channelName];
         
         if (channel.Plugins.TryGetValue(plugin, out var pluginState))
         {
@@ -74,6 +74,17 @@ public class PluginRepository
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Remove a plugin from the repository.
+    /// </summary>
+    /// <param name="channelName">The name of the channel</param>
+    /// <param name="plugin">The name of the plugin</param>
+    public void RemovePlugin(string channelName, string plugin)
+    {
+        this.State.Channels[channelName].Plugins.Remove(plugin);
+        SaveState();
     }
 
     /// <summary>
@@ -86,12 +97,12 @@ public class PluginRepository
     /// <param name="changelog">Plugin changelog</param>
     public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string changelog)
     {
-        if (!this.state.Channels.ContainsKey(channelName))
+        if (!this.State.Channels.ContainsKey(channelName))
         {
-            this.state.Channels[channelName] = new State.Channel();
+            this.State.Channels[channelName] = new State.Channel();
         }
         
-        var channel = this.state.Channels[channelName];
+        var channel = this.State.Channels[channelName];
 
         if (channel.Plugins.TryGetValue(plugin, out var pluginState))
         {

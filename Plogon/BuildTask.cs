@@ -7,7 +7,7 @@ namespace Plogon;
 
 public class BuildTask
 {
-    public Manifest Manifest { get; set; }
+    public Manifest? Manifest { get; set; }
     
     public string? HaveCommit { get; set; }
     
@@ -18,4 +18,12 @@ public class BuildTask
     public string Channel { get; set; }
     
     public string InternalName { get; set; }
+    
+    public TaskType Type { get; set; }
+
+    public enum TaskType
+    {
+        Build,
+        Remove,
+    }
 }

@@ -49,7 +49,7 @@ class Program
         try
         {
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder);
-            var tasks = buildProcessor.GetTasks();
+            var tasks = buildProcessor.GetBuildTasks();
 
             if (!tasks.Any())
             {
@@ -104,6 +104,23 @@ class Program
                     
                     try
                     {
+                        if (task.Type == BuildTask.TaskType.Remove)
+                        {
+                            Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
+                            var removeStatus = await buildProcessor.ProcessTask(task, commit, null);
+
+                            if (removeStatus.Success)
+                            {
+                                buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "-", "Removed");
+                            }
+                            else
+                            {
+                                buildsMd.AddRow("🚯", $"{task.InternalName} [{task.Channel}]", "-", "Removal failed");
+                            }
+                            
+                            continue;
+                        }
+                        
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
