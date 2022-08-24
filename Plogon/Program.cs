@@ -115,7 +115,7 @@ class Program
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
-                            var removeStatus = await buildProcessor.ProcessTask(task, commit, null);
+                            var removeStatus = await buildProcessor.ProcessTask(task, commit, null, tasks);
 
                             if (removeStatus.Success)
                             {
@@ -157,7 +157,7 @@ class Program
                             changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
                         }
                         
-                        var status = await buildProcessor.ProcessTask(task, commit, changelog);
+                        var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
 
                         if (status.Success)
                         {

@@ -118,7 +118,7 @@ public class BuildProcessor
                         InternalName = plugin.Key,
                         Manifest = null,
                         Channel = channel.Key,
-                        HaveCommit = null,
+                        HaveCommit = plugin.Value.BuiltCommit,
                         HaveTimeBuilt = null,
                         HaveVersion = null,
                         Type = BuildTask.TaskType.Remove,
@@ -216,11 +216,19 @@ public class BuildProcessor
         public string? Key { get; set; }
     };
     
-    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string haveCommit, string wantCommit)
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string channel, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
     {
         if (string.IsNullOrEmpty(haveCommit))
         {
             haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
+            
+            var removeTask = tasks.FirstOrDefault(x =>
+                x.InternalName == internalName && x.Channel == channel && x.Type == BuildTask.TaskType.Remove);
+            if (removeTask != null)
+            {
+                haveCommit = removeTask.HaveCommit!;
+                Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
+            }
         }
         
         var diffPsi = new ProcessStartInfo("git",
@@ -332,10 +340,11 @@ public class BuildProcessor
     /// <param name="task">The task to build</param>
     /// <param name="commit">Whether or not the plugin should be committed to the repo</param>
     /// <param name="changelog">The plugin changelog</param>
+    /// <param name="otherTasks">All other queued tasks</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, ISet<BuildTask> otherTasks)
     {
         if (task.Type == BuildTask.TaskType.Remove)
         {
@@ -398,7 +407,7 @@ public class BuildProcessor
             });
         }
         
-        var diffUrl = await GetDiffUrl(work, task.HaveCommit!, task.Manifest.Plugin.Commit);
+        var diffUrl = await GetDiffUrl(work, task.Channel, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
