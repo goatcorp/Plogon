@@ -16,7 +16,7 @@ public class ManifestStorage
 
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, Manifest>> Channels;
 
-    public ManifestStorage(DirectoryInfo baseDirectory, string? prDiff)
+    public ManifestStorage(DirectoryInfo baseDirectory, string? prDiff, bool ignoreNonAffected)
     {
         this.baseDirectory = baseDirectory;
 
@@ -30,18 +30,18 @@ public class ManifestStorage
         var stableDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "stable"));
         var testingDir = new DirectoryInfo(Path.Combine(this.baseDirectory.FullName, "testing"));
 
-        channels.Add(stableDir.Name, GetManifestsInDirectory(stableDir));
+        channels.Add(stableDir.Name, GetManifestsInDirectory(stableDir, ignoreNonAffected));
 
         foreach (var testingChannelDir in testingDir.EnumerateDirectories())
         {
-            var manifests = GetManifestsInDirectory(testingChannelDir);
+            var manifests = GetManifestsInDirectory(testingChannelDir, ignoreNonAffected);
             channels.Add($"testing-{testingChannelDir.Name}", manifests);
         }
 
         this.Channels = channels;
     }
 
-    private Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory)
+    private Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory, bool ignoreNonAffected)
     {
         var manifests = new Dictionary<string, Manifest>();
 
@@ -50,7 +50,7 @@ public class ManifestStorage
             try
             {
                 var tomlFile = manifestDir.GetFiles("*.toml").First();
-                if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName))
+                if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName) && ignoreNonAffected)
                     continue;
                 
                 var tomlText = tomlFile.OpenText().ReadToEnd();
@@ -72,7 +72,7 @@ public class ManifestStorage
     {
         var manifestFiles = new HashSet<string>();
         
-        var rx = new Regex(@"(\+\+\+\s+b\/)(.*\.toml)", RegexOptions.IgnoreCase);
+        var rx = new Regex(@"((?:\+\+\+\s+b\/)|(?:rename to\s+))(.*\.toml)", RegexOptions.IgnoreCase);
         foreach (Match match in rx.Matches(prDiff))
         {
             manifestFiles.Add(new FileInfo(Path.Combine(this.baseDirectory.FullName, match.Groups[2].Value)).FullName);

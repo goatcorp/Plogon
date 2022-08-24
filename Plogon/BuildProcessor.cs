@@ -62,7 +62,7 @@ public class BuildProcessor
         this.artifactFolder = artifactFolder;
 
         this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff);
+        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
         this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"), manifestFolder);
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
