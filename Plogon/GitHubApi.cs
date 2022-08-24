@@ -61,6 +61,17 @@ public class GitHubApi
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Retrieves a diff as string for a given pull request
+    /// </summary>
+    /// <param name="repo">The repo to use</param>
+    /// <param name="prNum">The pull request number</param>
+    /// <returns></returns>
+    public async Task<string> GetPullRequestDiff(string repo, string prNum)
+    {
+        return await this.client.GetStringAsync($"https://github.com/{repo}/pull/{prNum}.diff");
+    }
+
     private class IssueResponse
     {
         [JsonPropertyName("body")] public string? Body { get; } = null!;

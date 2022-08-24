@@ -48,7 +48,17 @@ class Program
 
         try
         {
-            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder);
+            string? prDiff = null;
+            if (gitHubApi is not null && repoName is not null && prNumber is not null)
+            {
+                prDiff = await gitHubApi.GetPullRequestDiff(repoName, prNumber);
+            }
+            else
+            {
+                Log.Information("Diff for PR is not available, this might lead to unnecessary builds being performed.");
+            }
+            
+            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder, prDiff);
             var tasks = buildProcessor.GetBuildTasks();
 
             if (!tasks.Any())
