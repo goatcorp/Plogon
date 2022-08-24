@@ -541,6 +541,9 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
+                    if (task.Manifest.Directory == null)
+                        throw new Exception("Manifest had no directory set");
+                    
                     var imagesSourcePath = Path.Combine(task.Manifest.Directory.FullName, "images");
                     if (Directory.Exists(imagesSourcePath)) 
                     {

@@ -26,4 +26,6 @@ public class BuildTask
         Build,
         Remove,
     }
+
+    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit} - {Manifest?.Plugin?.Commit} - {Manifest?.Directory?.FullName}";
 }

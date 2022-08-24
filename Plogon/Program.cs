@@ -61,6 +61,15 @@ class Program
             
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder, prDiff);
             var tasks = buildProcessor.GetBuildTasks();
+            
+            GitHubOutputBuilder.StartGroup("List all tasks");
+
+            foreach (var buildTask in tasks)
+            {
+                Log.Information(buildTask.ToString());
+            }
+            
+            GitHubOutputBuilder.EndGroup();
 
             if (!tasks.Any())
             {
