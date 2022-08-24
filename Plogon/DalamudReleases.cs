@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Serilog;
+using Tomlyn;
 
 namespace Plogon;
 
@@ -15,13 +17,30 @@ public class DalamudReleases
 {
     private const string URL_TEMPLATE = "https://kamori.goats.dev/Dalamud/Release/VersionInfo?track={0}";
 
+    private readonly Overrides? overrides;
+    
+    private class Overrides
+    {
+        public Overrides()
+        {
+            ChannelTracks = new Dictionary<string, string>();
+        }
+        
+        public Dictionary<string, string> ChannelTracks { get; set; }
+    }
+
     /// <summary>
     /// ctor
     /// </summary>
     /// <param name="releasesDir">Where releases should go</param>
-    public DalamudReleases(DirectoryInfo releasesDir)
+    /// <param name="manifestsDir">Where manifests are from</param>
+    public DalamudReleases(DirectoryInfo releasesDir, DirectoryInfo manifestsDir)
     {
         this.ReleasesDir = releasesDir;
+
+        var overridesFile = new FileInfo(Path.Combine(manifestsDir.FullName, "overrides.toml"));
+        if (overridesFile.Exists)
+            this.overrides = Toml.ToModel<Overrides>(overridesFile.OpenText().ReadToEnd());
     }
     
     /// <summary>
@@ -31,14 +50,15 @@ public class DalamudReleases
     
     private async Task<DalamudVersionInfo?> GetVersionInfoForTrackAsync(string track)
     {
-        if (track == "stable")
-            track = "release";
+        var dalamudTrack = "release";
+        if (this.overrides != null && this.overrides.ChannelTracks.TryGetValue(track, out var mapping))
+        {
+            dalamudTrack = mapping;
+            Log.Information("Overriding channel {Track} Dalamud track with {NewTrack}", track, dalamudTrack);
+        }
         
-        if (track.StartsWith("testing-"))
-            track = track.Split("-")[1];
-
         using var client = new HttpClient();
-        return await client.GetFromJsonAsync<DalamudVersionInfo>(string.Format(URL_TEMPLATE, track));
+        return await client.GetFromJsonAsync<DalamudVersionInfo>(string.Format(URL_TEMPLATE, dalamudTrack));
     }
 
     /// <summary>
