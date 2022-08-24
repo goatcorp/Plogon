@@ -51,12 +51,13 @@ public class ManifestStorage
             {
                 var tomlFile = manifestDir.GetFiles("*.toml").First();
                 if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName))
-                {
                     continue;
-                }
                 
                 var tomlText = tomlFile.OpenText().ReadToEnd();
-                manifests.Add(manifestDir.Name, Toml.ToModel<Manifest>(tomlText));
+                var manifest = Toml.ToModel<Manifest>(tomlText);
+
+                manifest.Directory = manifestDir;
+                manifests.Add(manifestDir.Name, manifest);
             }
             catch (Exception ex)
             {
