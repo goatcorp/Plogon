@@ -27,5 +27,5 @@ public class BuildTask
         Remove,
     }
 
-    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit} - {Manifest?.Plugin?.Commit} - {Manifest?.Directory?.FullName}";
+    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit ?? "?"} - {Manifest?.Plugin?.Commit ?? "?"} - {Manifest?.Directory?.FullName ?? "?"}";
 }
