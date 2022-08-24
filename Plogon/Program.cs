@@ -45,6 +45,7 @@ class Program
 
         var aborted = false;
         var anyFailed = false;
+        var anyTried = false;
 
         try
         {
@@ -139,6 +140,8 @@ class Program
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
+                        anyTried = true;
+                        
                         var changelog = task.Manifest.Plugin.Changelog;
                         if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null && gitHubApi != null && commit)
                         {
@@ -199,10 +202,13 @@ class Program
                 {
                     var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
                     var links = $"\n##### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+
+                    var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
+                    if (!anyTried)
+                        commentText = "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
                     
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
-                        (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
-                        "\n\n" + buildsMd + links);
+                        commentText + "\n\n" + buildsMd + links);
 
                     if (commentTask != null)
                         await commentTask;
@@ -215,6 +221,12 @@ class Program
             if (!string.IsNullOrEmpty(githubSummaryFilePath))
             {
                 await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
+            }
+
+            if (!anyTried && prNumber != null)
+            {
+                Log.Error("Was a PR, but did not build any plugins - failing.");
+                anyFailed = true;
             }
 
             if (aborted || anyFailed) Environment.Exit(1);
