@@ -216,14 +216,14 @@ public class BuildProcessor
         public string? Key { get; set; }
     };
     
-    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string channel, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
     {
         if (string.IsNullOrEmpty(haveCommit))
         {
             haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
             
             var removeTask = tasks.FirstOrDefault(x =>
-                x.InternalName == internalName && x.Channel == channel && x.Type == BuildTask.TaskType.Remove);
+                x.InternalName == internalName && x.Type == BuildTask.TaskType.Remove);
             if (removeTask != null)
             {
                 haveCommit = removeTask.HaveCommit!;
@@ -407,7 +407,7 @@ public class BuildProcessor
             });
         }
         
-        var diffUrl = await GetDiffUrl(work, task.Channel, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
+        var diffUrl = await GetDiffUrl(work, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
