@@ -108,7 +108,7 @@ class Program
                     {
                         Log.Information("Aborted, won't run: {Name}", task.InternalName);
 
-                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest?.Plugin.Commit ?? "n/a", "Not ran");
+                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest?.Plugin.Commit[..7] ?? "n/a", "Not ran");
                         continue;
                     }
                     
@@ -148,7 +148,7 @@ class Program
 
                             // Only complain if the last build was less recent, indicates configuration error
                             if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
-                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not your plugin");
+                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], "Not your plugin");
                         
                             continue;
                         }
@@ -175,11 +175,11 @@ class Program
 
                             if (status.Version == task.HaveVersion && task.HaveVersion != null)
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
-                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"v{status.Version} - [Diff]({status.DiffUrl})");
 
                                 if (!string.IsNullOrEmpty(prNumber) && !commit)
                                     await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
@@ -190,7 +190,7 @@ class Program
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
                                 task.Manifest.Plugin.Commit);
                             
-                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Build failed ([Diff]({status.DiffUrl}))");
+                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"Build failed ([Diff]({status.DiffUrl}))");
                             anyFailed = true;
                         }
                     }
