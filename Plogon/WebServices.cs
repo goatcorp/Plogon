@@ -84,8 +84,10 @@ public class WebServices
         if (result.StatusCode == HttpStatusCode.NotFound)
             return null;
         
+        var text = await result.Content.ReadAsStringAsync();
+        Log.Information("PR: {Text}", text);
         result.EnsureSuccessStatusCode();
 
-        return await result.Content.ReadAsStringAsync();
+        return text;
     }
 }

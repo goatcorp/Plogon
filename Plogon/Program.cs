@@ -253,7 +253,7 @@ class Program
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
                     
                     // TODO: We don't support this for removals for now
-                    foreach (var buildResult in statuses)
+                    foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
                     {
                         if (!buildResult.Success && !aborted)
                             continue;
