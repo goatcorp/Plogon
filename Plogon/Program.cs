@@ -25,6 +25,8 @@ class Program
     {
         SetupLogging();
 
+        var webhook = new DiscordWebhook();
+        
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
         
@@ -207,20 +209,37 @@ class Program
                 githubSummary += "### Images used\n";
                 githubSummary += imagesMd.ToString();
 
+                var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+                
                 if (repoName != null && prNumber != null)
                 {
-                    var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
-                    var links = $"\n##### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+                    var links = $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
                     if (!anyTried)
                         commentText = "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
                     
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
-                        commentText + "\n\n" + buildsMd + links);
+                        commentText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
                         await commentTask;
+
+                    var hookTitle = $"PR #{prNumber}";
+                    
+                    var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
+                    var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
+                    
+                    if (nameTask != null)
+                        hookTitle += $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
+
+                    var ok = !anyFailed && anyTried;
+                    await webhook.Send(ok, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                }
+
+                if (repoName != null && commit && anyTried)
+                {
+                    await webhook.Send(!anyFailed, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
                 }
             }
         }
