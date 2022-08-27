@@ -44,9 +44,8 @@ public class WebServices
     public async Task<string[]> GetMessageIds(string prNumber)
     {
         using var client = new HttpClient();
-        var result = await client.PostAsync(
-            $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}",
-            null);
+        var result = await client.GetAsync(
+            $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}");
         result.EnsureSuccessStatusCode();
 
         return await result.Content.ReadFromJsonAsync<string[]>() ?? Array.Empty<string>();
@@ -78,9 +77,8 @@ public class WebServices
     public async Task<string> GetPrNumber(string internalName, string version)
     {
         using var client = new HttpClient();
-        var result = await client.PostAsync(
-            $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}",
-            null);
+        var result = await client.GetAsync(
+            $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}");
         result.EnsureSuccessStatusCode();
 
         return await result.Content.ReadAsStringAsync();
