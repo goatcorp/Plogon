@@ -10,7 +10,10 @@ namespace Plogon;
 /// </summary>
 public class DiscordWebhook
 {
-    private DiscordWebhookClient Client { get; }
+    /// <summary>
+    /// Webhook client
+    /// </summary>
+    public DiscordWebhookClient Client { get; }
 
     /// <summary>
     /// Init with webhook from env var
@@ -27,7 +30,7 @@ public class DiscordWebhook
     /// <param name="message"></param>
     /// <param name="title"></param>
     /// <param name="footer"></param>
-    public async Task Send(Color color, string message, string title, string footer)
+    public async Task<ulong> Send(Color color, string message, string title, string footer)
     {
         var embed = new EmbedBuilder()
             .WithColor(color)
@@ -35,6 +38,6 @@ public class DiscordWebhook
             .WithFooter(footer)
             .WithDescription(message)
             .Build();
-        await this.Client.SendMessageAsync(embeds: new[] { embed });
+        return await this.Client.SendMessageAsync(embeds: new[] { embed });
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -27,6 +28,7 @@ class Program
         SetupLogging();
 
         var webhook = new DiscordWebhook();
+        var webservices = new WebServices();
         
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
@@ -49,6 +51,8 @@ class Program
         var aborted = false;
         var anyFailed = false;
         var anyTried = false;
+
+        var statuses = new List<BuildProcessor.BuildResult>();
 
         try
         {
@@ -119,7 +123,8 @@ class Program
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
                             var removeStatus = await buildProcessor.ProcessTask(task, commit, null, tasks);
-
+                            statuses.Add(removeStatus);
+                            
                             if (removeStatus.Success)
                             {
                                 buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "n/a", "Removed");
@@ -161,6 +166,7 @@ class Program
                         }
                         
                         var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
+                        statuses.Add(status);
 
                         if (status.Success)
                         {
@@ -174,6 +180,9 @@ class Program
                             else
                             {
                                 buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
+
+                                if (!string.IsNullOrEmpty(prNumber))
+                                    await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
                             }
                         }
                         else
@@ -235,12 +244,40 @@ class Program
                         hookTitle += $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    await webhook.Send(ok ? Color.Purple : Color.Red, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                    var id = await webhook.Send(ok ? Color.Purple : Color.Red, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                    await webservices.RegisterMessageId(prNumber!, id.ToString());
                 }
 
                 if (repoName != null && commit && anyTried)
                 {
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
+
+                    // TODO: We don't support this for removals for now
+                    foreach (var buildResult in statuses)
+                    {
+                        if (!buildResult.Success)
+                            continue;
+
+                        var resultPrNum =
+                            await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Version!);
+                        var msgIds = await webservices.GetMessageIds(resultPrNum);
+
+                        foreach (var id in msgIds)
+                        {
+                            await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
+                            {
+                                var embed = properties.Embeds.Value.First();
+                                var newEmbed = new EmbedBuilder()
+                                    .WithColor(embed.Color!.Value)
+                                    .WithTitle(embed.Title)
+                                    .WithCurrentTimestamp()
+                                    .WithFooter("Committed")
+                                    .WithDescription(embed.Description)
+                                    .Build();
+                                properties.Embeds = new[] { newEmbed };
+                            });
+                        }
+                    }
                 }
             }
         }

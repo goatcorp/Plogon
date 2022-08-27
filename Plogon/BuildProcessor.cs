@@ -315,11 +315,13 @@ public class BuildProcessor
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
         /// <param name="version">plugin version</param>
-        public BuildResult(bool success, string? diffUrl, string? version)
+        /// <param name="task">processed task</param>
+        public BuildResult(bool success, string? diffUrl, string? version, BuildTask task)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
             this.Version = version;
+            this.Task = task;
         }
         
         /// <summary>
@@ -336,6 +338,11 @@ public class BuildProcessor
         /// The version of the plugin artifact
         /// </summary>
         public string? Version { get; private set; }
+        
+        /// <summary>
+        /// The task that was processed
+        /// </summary>
+        public BuildTask Task { get; private set; }
     }
 
     private class LegacyPluginManifest
@@ -366,7 +373,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, null);
+            return new BuildResult(true, null, null, task);
         }
 
         if (task.Manifest == null)
@@ -603,7 +610,7 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl, version);
+        return new BuildResult(exitCode == 0, diffUrl, version, task);
     }
 
     /// <summary>
