@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace Plogon;
 
@@ -32,6 +33,8 @@ public class WebServices
         var result = await client.PostAsync(
             $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&messageId={messageId}",
             null);
+        
+        Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
 
@@ -63,6 +66,8 @@ public class WebServices
         var result = await client.PostAsync(
             $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&internalName={internalName}&version={version}",
             null);
+        
+        Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
 
