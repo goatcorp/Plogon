@@ -251,11 +251,11 @@ class Program
                 if (repoName != null && commit && anyTried)
                 {
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
-
+                    
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses)
                     {
-                        if (!buildResult.Success)
+                        if (!buildResult.Success && !aborted)
                             continue;
 
                         var resultPrNum =
