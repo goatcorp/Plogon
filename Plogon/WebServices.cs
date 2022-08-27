@@ -27,14 +27,15 @@ public class WebServices
     /// </summary>
     /// <param name="prNumber"></param>
     /// <param name="messageId"></param>
-    public async Task RegisterMessageId(string prNumber, string messageId)
+    public async Task RegisterMessageId(string prNumber, ulong messageId)
     {
+        var url =
+            $"&prNumber={prNumber}&messageId={messageId}";
         using var client = new HttpClient();
-        var result = await client.PostAsync(
-            $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&messageId={messageId}",
-            null);
+        var result = 
+            await client.PostAsync($"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}" + url, null);
         
-        Log.Information(await result.Content.ReadAsStringAsync());
+        Log.Information(url + " - " + await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
 

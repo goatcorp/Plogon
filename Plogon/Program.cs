@@ -245,7 +245,7 @@ class Program
 
                     var ok = !anyFailed && anyTried;
                     var id = await webhook.Send(ok ? Color.Purple : Color.Red, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
-                    await webservices.RegisterMessageId(prNumber!, id.ToString());
+                    await webservices.RegisterMessageId(prNumber!, id);
                 }
 
                 if (repoName != null && commit && anyTried)
