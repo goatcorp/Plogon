@@ -262,7 +262,7 @@ class Program
                             await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Version!);
                         if (resultPrNum == null)
                         {
-                            Log.Information("No PR for {InternalName} - {Version}", buildResult.Task.InternalName, buildResult.Version);
+                            Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName, buildResult.Version);
                             continue;
                         }
                         
@@ -270,10 +270,8 @@ class Program
 
                         foreach (var id in msgIds)
                         {
-                            Log.Information("Updating webhook message {Id} for {PrNumber}", id, resultPrNum);
                             await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
                             {
-                                Log.Information("Embed: {HasEmbeds}, Content: {HasContent}, Components: {HasComponents}", properties.Embeds.IsSpecified, properties.Content.IsSpecified, properties.Components.IsSpecified);
                                 var embed = properties.Embeds.Value.First();
                                 var newEmbed = new EmbedBuilder()
                                     .WithColor(Color.LightGrey)
