@@ -268,7 +268,7 @@ class Program
                             {
                                 var embed = properties.Embeds.Value.First();
                                 var newEmbed = new EmbedBuilder()
-                                    .WithColor(embed.Color!.Value)
+                                    .WithColor(Color.LightGrey)
                                     .WithTitle(embed.Title)
                                     .WithCurrentTimestamp()
                                     .WithFooter("Committed")
