@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using System.Runtime.Serialization;
 #pragma warning disable CS1591
 #pragma warning disable CS8618
@@ -28,4 +29,6 @@ public class Manifest
     }
     
     public PluginInfo Plugin { get; set; }
+
+    public DirectoryInfo Directory { get; set; }
 }

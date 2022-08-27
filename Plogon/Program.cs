@@ -45,11 +45,31 @@ class Program
 
         var aborted = false;
         var anyFailed = false;
+        var anyTried = false;
 
         try
         {
-            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder);
-            var tasks = buildProcessor.GetTasks();
+            string? prDiff = null;
+            if (gitHubApi is not null && repoName is not null && prNumber is not null)
+            {
+                prDiff = await gitHubApi.GetPullRequestDiff(repoName, prNumber);
+            }
+            else
+            {
+                Log.Information("Diff for PR is not available, this might lead to unnecessary builds being performed.");
+            }
+            
+            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder, prDiff);
+            var tasks = buildProcessor.GetBuildTasks();
+            
+            GitHubOutputBuilder.StartGroup("List all tasks");
+
+            foreach (var buildTask in tasks)
+            {
+                Log.Information(buildTask.ToString());
+            }
+            
+            GitHubOutputBuilder.EndGroup();
 
             if (!tasks.Any())
             {
@@ -77,37 +97,67 @@ class Program
                 
                 foreach (var task in tasks)
                 {
-                    GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest.Plugin.Commit})");
-
-                    if (!buildAll && task.Manifest.Plugin.Owners.All(x => x != actor))
-                    {
-                        Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
-                            task.Manifest.Plugin.Commit,
-                            task.HaveCommit ?? "nothing");
-
-                        // Only complain if the last build was less recent, indicates configuration error
-                        if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
-                            buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not your plugin");
-                        
-                        continue;
-                    }
-                    
                     if (aborted)
                     {
-                        Log.Information("Aborted, won't run: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
-                            task.Manifest.Plugin.Commit,
-                            task.HaveCommit ?? "nothing");
+                        Log.Information("Aborted, won't run: {Name}", task.InternalName);
 
-                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not ran");
+                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest?.Plugin.Commit ?? "n/a", "Not ran");
                         continue;
                     }
                     
                     try
                     {
+                        if (task.Type == BuildTask.TaskType.Remove)
+                        {
+                            if (!commit)
+                                continue;
+                            
+                            GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
+                            Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
+
+                            var removeStatus = await buildProcessor.ProcessTask(task, commit, null, tasks);
+
+                            if (removeStatus.Success)
+                            {
+                                buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "n/a", "Removed");
+                            }
+                            else
+                            {
+                                buildsMd.AddRow("🚯", $"{task.InternalName} [{task.Channel}]", "n/a", "Removal failed");
+                            }
+                            
+                            GitHubOutputBuilder.EndGroup();
+                            continue;
+                        }
+                        
+                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin.Commit})");
+
+                        if (!buildAll && task.Manifest.Plugin.Owners.All(x => x != actor))
+                        {
+                            Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
+                                task.Manifest.Plugin.Commit,
+                                task.HaveCommit ?? "nothing");
+
+                            // Only complain if the last build was less recent, indicates configuration error
+                            if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
+                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Not your plugin");
+                        
+                            continue;
+                        }
+                        
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
-                        var status = await buildProcessor.ProcessTask(task, commit);
+
+                        anyTried = true;
+                        
+                        var changelog = task.Manifest.Plugin.Changelog;
+                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null && gitHubApi != null && commit)
+                        {
+                            changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
+                        }
+                        
+                        var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
 
                         if (status.Success)
                         {
@@ -138,14 +188,14 @@ class Program
                         // Need to abort.
                         
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
-                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, "Could not commit to repo");
+                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit, "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
-                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"Build system error: {ex.Message}");
+                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit, $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 
@@ -159,9 +209,15 @@ class Program
 
                 if (repoName != null && prNumber != null)
                 {
+                    var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+                    var links = $"\n##### [Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+
+                    var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
+                    if (!anyTried)
+                        commentText = "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
+                    
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
-                        (anyFailed ? "Builds failed, please check action output." : "All builds OK!") +
-                        "\n\n" + buildsMd.ToString());
+                        commentText + "\n\n" + buildsMd + links);
 
                     if (commentTask != null)
                         await commentTask;
@@ -174,6 +230,12 @@ class Program
             if (!string.IsNullOrEmpty(githubSummaryFilePath))
             {
                 await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
+            }
+
+            if (!anyTried && prNumber != null)
+            {
+                Log.Error("Was a PR, but did not build any plugins - failing.");
+                anyFailed = true;
             }
 
             if (aborted || anyFailed) Environment.Exit(1);
