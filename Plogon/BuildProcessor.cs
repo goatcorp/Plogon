@@ -29,9 +29,17 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-
-
+    
     private readonly DockerClient dockerClient;
+
+    private static readonly string[] DalamudInternalDll = new[]
+    {
+        "Dalamud.dll",
+        "Lumina.dll",
+        "Lumina.Excel.dll",
+        "ImGui.NET.dll",
+        "ImGuiScene.dll",
+    };
 
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
@@ -197,6 +205,8 @@ public class BuildProcessor
         foreach (var file in lockFiles)
         {
             var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(file.FullName));
+            if (lockFileData == null)
+                throw new Exception($"Lockfile did not deserialize: {file.FullName}");
 
             if (lockFileData.Version != 1)
                 throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
@@ -497,6 +507,15 @@ public class BuildProcessor
             {
                 Force = true,
             });
+
+        var outputFiles = output.GetFiles("*.dll", SearchOption.AllDirectories);
+        foreach (var outputFile in outputFiles)
+        {
+            if (DalamudInternalDll.Any(x => x == outputFile.Name))
+            {
+                throw new Exception($"Build is emitting Dalamud-internal DLL({outputFile.Name}), this will cause issues.");
+            }
+        }
 
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
         string? version = null;
