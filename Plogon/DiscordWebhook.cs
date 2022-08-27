@@ -23,14 +23,14 @@ public class DiscordWebhook
     /// <summary>
     /// Send a webhook
     /// </summary>
-    /// <param name="good"></param>
+    /// <param name="color"></param>
     /// <param name="message"></param>
     /// <param name="title"></param>
     /// <param name="footer"></param>
-    public async Task Send(bool good, string message, string title, string footer)
+    public async Task Send(Color color, string message, string title, string footer)
     {
         var embed = new EmbedBuilder()
-            .WithColor(good ? Color.Green : Color.Red)
+            .WithColor(color)
             .WithTitle(title)
             .WithFooter(footer)
             .WithDescription(message)

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Discord;
 using Serilog;
 
 namespace Plogon;
@@ -234,12 +235,12 @@ class Program
                         hookTitle += $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    await webhook.Send(ok, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                    await webhook.Send(ok ? Color.Purple : Color.Red, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
                 }
 
                 if (repoName != null && commit && anyTried)
                 {
-                    await webhook.Send(!anyFailed, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
+                    await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
                 }
             }
         }
