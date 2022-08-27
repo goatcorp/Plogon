@@ -34,7 +34,7 @@ public class MarkdownTableBuilder
                 (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
 
             if (!string.IsNullOrWhiteSpace(text))
-                return text[..^2];
+                return text[..^1];
             
             return string.Empty;
         }
