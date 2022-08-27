@@ -181,7 +181,7 @@ class Program
                             {
                                 buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit, $"v{status.Version} - [Diff]({status.DiffUrl})");
 
-                                if (!string.IsNullOrEmpty(prNumber))
+                                if (!string.IsNullOrEmpty(prNumber) && !commit)
                                     await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
                             }
                         }
