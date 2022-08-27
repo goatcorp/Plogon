@@ -260,6 +260,12 @@ class Program
 
                         var resultPrNum =
                             await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Version!);
+                        if (resultPrNum == null)
+                        {
+                            Log.Information("No PR for {InternalName} - {Version}", buildResult.Task.InternalName, buildResult.Version);
+                            continue;
+                        }
+                        
                         var msgIds = await webservices.GetMessageIds(resultPrNum);
 
                         foreach (var id in msgIds)

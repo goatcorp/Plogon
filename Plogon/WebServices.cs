@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
@@ -74,11 +75,15 @@ public class WebServices
     /// <param name="internalName"></param>
     /// <param name="version"></param>
     /// <returns></returns>
-    public async Task<string> GetPrNumber(string internalName, string version)
+    public async Task<string?> GetPrNumber(string internalName, string version)
     {
         using var client = new HttpClient();
         var result = await client.GetAsync(
             $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}");
+
+        if (result.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        
         result.EnsureSuccessStatusCode();
 
         return await result.Content.ReadAsStringAsync();
