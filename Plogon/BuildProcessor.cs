@@ -216,8 +216,13 @@ public class BuildProcessor
         public string? Key { get; set; }
     };
     
-    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
+        var internalName = task.InternalName;
+        var haveCommit = task.HaveCommit;
+        var wantCommit = task.Manifest!.Plugin.Commit;
+        var host = new Uri(task.Manifest!.Plugin.Repository);
+
         if (string.IsNullOrEmpty(haveCommit))
         {
             haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
@@ -229,6 +234,11 @@ public class BuildProcessor
                 haveCommit = removeTask.HaveCommit!;
                 Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
             }
+        }
+
+        if (host.Host == "github.com")
+        {
+            return $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
         }
         
         var diffPsi = new ProcessStartInfo("git",
@@ -407,7 +417,7 @@ public class BuildProcessor
             });
         }
         
-        var diffUrl = await GetDiffUrl(work, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
+        var diffUrl = await GetDiffUrl(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
