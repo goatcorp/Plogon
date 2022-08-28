@@ -29,9 +29,17 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-
-
+    
     private readonly DockerClient dockerClient;
+
+    private static readonly string[] DalamudInternalDll = new[]
+    {
+        "Dalamud.dll",
+        "Lumina.dll",
+        "Lumina.Excel.dll",
+        "ImGui.NET.dll",
+        "ImGuiScene.dll",
+    };
 
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
@@ -197,6 +205,8 @@ public class BuildProcessor
         foreach (var file in lockFiles)
         {
             var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(file.FullName));
+            if (lockFileData == null)
+                throw new Exception($"Lockfile did not deserialize: {file.FullName}");
 
             if (lockFileData.Version != 1)
                 throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
@@ -269,6 +279,25 @@ public class BuildProcessor
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
     }
 
+    private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"rev-parse --symbolic-full-name {commit}")
+        {
+            RedirectStandardOutput = true,
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("rev-parse process was null.");
+
+        await process.WaitForExitAsync();
+        var output = await process.StandardOutput.ReadToEndAsync();
+
+        return string.IsNullOrEmpty(output);
+    }
+    
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
     {
         HashSet<Tuple<string, string>> dependencies = new();
@@ -315,11 +344,13 @@ public class BuildProcessor
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
         /// <param name="version">plugin version</param>
-        public BuildResult(bool success, string? diffUrl, string? version)
+        /// <param name="task">processed task</param>
+        public BuildResult(bool success, string? diffUrl, string? version, BuildTask task)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
             this.Version = version;
+            this.Task = task;
         }
         
         /// <summary>
@@ -336,6 +367,11 @@ public class BuildProcessor
         /// The version of the plugin artifact
         /// </summary>
         public string? Version { get; private set; }
+        
+        /// <summary>
+        /// The task that was processed
+        /// </summary>
+        public BuildTask Task { get; private set; }
     }
 
     private class LegacyPluginManifest
@@ -366,7 +402,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, null);
+            return new BuildResult(true, null, null, task);
         }
 
         if (task.Manifest == null)
@@ -417,6 +453,9 @@ public class BuildProcessor
             });
         }
         
+        if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
+            throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
+
         var diffUrl = await GetDiffUrl(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
@@ -508,6 +547,15 @@ public class BuildProcessor
                 Force = true,
             });
 
+        var outputFiles = output.GetFiles("*.dll", SearchOption.AllDirectories);
+        foreach (var outputFile in outputFiles)
+        {
+            if (DalamudInternalDll.Any(x => x == outputFile.Name))
+            {
+                throw new Exception($"Build is emitting Dalamud-internal DLL({outputFile.Name}), this will cause issues.");
+            }
+        }
+
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
         string? version = null;
 
@@ -594,7 +642,7 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl, version);
+        return new BuildResult(exitCode == 0, diffUrl, version, task);
     }
 
     /// <summary>
