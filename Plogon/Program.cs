@@ -305,10 +305,26 @@ class Program
                                     .WithColor(Color.LightGrey)
                                     .WithTitle(embed.Title)
                                     .WithCurrentTimestamp()
-                                    .WithFooter("Committed")
-                                    .WithDescription(embed.Description)
-                                    .Build();
-                                properties.Embeds = new[] { newEmbed };
+                                    .WithDescription(embed.Description);
+
+                                if (embed.Author.HasValue)
+                                    newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name, embed.Author.Value.IconUrl,
+                                        embed.Author.Value.Url);
+
+                                if (embed.Footer.HasValue)
+                                {
+                                    if (embed.Footer.Value.Text.Contains("Comment"))
+                                    {
+                                        newEmbed = newEmbed.WithFooter(embed.Footer.Value.Text.Replace("Comment", "Committed"),
+                                            embed.Footer.Value.IconUrl);
+                                    }
+                                    else
+                                    {
+                                        newEmbed = newEmbed.WithFooter("Committed");
+                                    }
+                                }
+
+                                properties.Embeds = new[] { newEmbed.Build() };
                             });
                         }
                     }
