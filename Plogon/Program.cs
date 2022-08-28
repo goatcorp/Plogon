@@ -200,14 +200,14 @@ class Program
                         // Need to abort.
                         
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
-                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit, "Could not commit to repo");
+                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit[..7], "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
-                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit, $"Build system error: {ex.Message}");
+                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit[..7], $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 
@@ -255,6 +255,7 @@ class Program
                     }
 
                     buildInfo += anyTried ? buildsMd.GetText(true) : "No builds made.";
+                    buildInfo = buildInfo.Replace("✔️", "<:yeah:980227103725342810>");
                     
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
                     var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
