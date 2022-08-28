@@ -272,18 +272,20 @@ public class BuildProcessor
     private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
     {
         var psi = new ProcessStartInfo("git",
-            $"cat-file -e {commit}^{{commit}}")
+            $"rev-parse --symbolic-full-name {commit}")
         {
+            RedirectStandardOutput = true,
             WorkingDirectory = workDir.FullName,
         };
 
         var process = Process.Start(psi);
         if (process == null)
-            throw new Exception("Cat-file process was null.");
+            throw new Exception("rev-parse process was null.");
 
         await process.WaitForExitAsync();
+        var output = await process.StandardOutput.ReadToEndAsync();
 
-        return process.ExitCode == 0;
+        return string.IsNullOrEmpty(output);
     }
     
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
