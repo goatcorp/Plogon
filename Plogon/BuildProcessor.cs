@@ -269,6 +269,23 @@ public class BuildProcessor
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
     }
 
+    private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"cat-file -e {commit}^{{commit}}")
+        {
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Cat-file process was null.");
+
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0;
+    }
+    
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
     {
         HashSet<Tuple<string, string>> dependencies = new();
@@ -423,7 +440,10 @@ public class BuildProcessor
                 Init = true,
             });
         }
-        
+
+        if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
+            throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
+
         var diffUrl = await GetDiffUrl(work, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
