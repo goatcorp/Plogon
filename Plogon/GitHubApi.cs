@@ -89,7 +89,7 @@ public class GitHubApi
         var request = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.github.com/repos/{repo}/issues/{issueNumber}");
         var response = await this.client.SendAsync(request);
-        //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+        Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
         
         response.EnsureSuccessStatusCode();
 
