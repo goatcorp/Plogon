@@ -223,6 +223,9 @@ class Program
                 
                 if (repoName != null && prNumber != null)
                 {
+                    var existingMessages = await webservices.GetMessageIds(prNumber);
+                    var alreadyPosted = existingMessages.Length > 0;
+                    
                     var links = $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
@@ -236,7 +239,21 @@ class Program
                         await commentTask;
 
                     var hookTitle = $"PR #{prNumber}";
-                    
+                    var buildInfo = (anyTried ? buildsMd.GetText(true) : "No builds made.");
+
+                    if (!alreadyPosted)
+                    {
+                        hookTitle += " created";
+
+                        var prDesc = await gitHubApi!.GetIssueBody(repoName, int.Parse(prNumber));
+                        if (!string.IsNullOrEmpty(prDesc))
+                            buildInfo += $"\n```\n{prDesc}\n```\n";
+                    }
+                    else
+                    {
+                        hookTitle += " updated";
+                    }
+
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
                     var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
                     
@@ -244,7 +261,7 @@ class Program
                         hookTitle += $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    var id = await webhook.Send(ok ? Color.Purple : Color.Red, $"{(anyTried ? buildsMd.GetText(true) : "No builds made.")}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                    var id = await webhook.Send(ok ? Color.Purple : Color.Red, $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
                     await webservices.RegisterMessageId(prNumber!, id);
                 }
 
