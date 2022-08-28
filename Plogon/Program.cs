@@ -239,7 +239,7 @@ class Program
                         await commentTask;
 
                     var hookTitle = $"PR #{prNumber}";
-                    var buildInfo = (anyTried ? buildsMd.GetText(true) : "No builds made.");
+                    var buildInfo = string.Empty;
 
                     if (!alreadyPosted)
                     {
@@ -247,13 +247,15 @@ class Program
 
                         var prDesc = await gitHubApi!.GetIssueBody(repoName, int.Parse(prNumber));
                         if (!string.IsNullOrEmpty(prDesc))
-                            buildInfo += $"\n```\n{prDesc}\n```\n";
+                            buildInfo += $"```\n{prDesc}\n```\n";
                     }
                     else
                     {
                         hookTitle += " updated";
                     }
 
+                    buildInfo += anyTried ? buildsMd.GetText(true) : "No builds made.";
+                    
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
                     var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
                     
