@@ -104,11 +104,19 @@ class Program
                 
                 foreach (var task in tasks)
                 {
+                    var fancyCommit = "n/a";
+                    if (task.Manifest?.Plugin?.Commit != null)
+                    {
+                        fancyCommit = task.Manifest.Plugin.Commit.Length > 7 ? 
+                            task.Manifest.Plugin.Commit[..7] : 
+                            task.Manifest.Plugin.Commit;
+                    }
+                    
                     if (aborted)
                     {
                         Log.Information("Aborted, won't run: {Name}", task.InternalName);
 
-                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", task.Manifest?.Plugin.Commit[..7] ?? "n/a", "Not ran");
+                        buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Not ran");
                         continue;
                     }
                     
@@ -138,7 +146,7 @@ class Program
                             continue;
                         }
                         
-                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin.Commit})");
+                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin!.Commit})");
 
                         if (!buildAll && task.Manifest.Plugin.Owners.All(x => x != actor))
                         {
@@ -148,7 +156,7 @@ class Program
 
                             // Only complain if the last build was less recent, indicates configuration error
                             if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
-                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], "Not your plugin");
+                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Not your plugin");
                         
                             continue;
                         }
@@ -175,11 +183,11 @@ class Program
 
                             if (status.Version == task.HaveVersion && task.HaveVersion != null)
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
-                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"v{status.Version} - [Diff]({status.DiffUrl})");
 
                                 if (!string.IsNullOrEmpty(prNumber) && !commit)
                                     await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
@@ -190,7 +198,7 @@ class Program
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
                                 task.Manifest.Plugin.Commit);
                             
-                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", task.Manifest.Plugin.Commit[..7], $"Build failed ([Diff]({status.DiffUrl}))");
+                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Build failed ([Diff]({status.DiffUrl}))");
                             anyFailed = true;
                         }
                     }
@@ -200,14 +208,14 @@ class Program
                         // Need to abort.
                         
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
-                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit[..7], "Could not commit to repo");
+                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
-                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", task.Manifest!.Plugin.Commit[..7], $"Build system error: {ex.Message}");
+                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 
