@@ -23,6 +23,14 @@ public class DiscordWebhook
         this.Client = new DiscordWebhookClient(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
     }
 
+    public static DateTime GetPacificStandardTime()
+    {
+        var utc = DateTime.UtcNow;
+        var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
+        var pacificTime = TimeZoneInfo.ConvertTimeFromUtc(utc, pacificZone);
+        return pacificTime;
+    }
+    
     /// <summary>
     /// Send a webhook
     /// </summary>
@@ -38,6 +46,16 @@ public class DiscordWebhook
             .WithFooter(footer)
             .WithDescription(message)
             .Build();
-        return await this.Client.SendMessageAsync(embeds: new[] { embed });
+
+        var time = GetPacificStandardTime();
+        var username = "Plo";
+        var avatarUrl = "https://goatcorp.github.io/icons/plo.png";
+        if (time.Hour is > 20 or < 7)
+        {
+            username = "Gon";
+            avatarUrl = "https://goatcorp.github.io/icons/gon.png";
+        }
+        
+        return await this.Client.SendMessageAsync(embeds: new[] { embed }, username: username, avatarUrl: avatarUrl);
     }
 }
