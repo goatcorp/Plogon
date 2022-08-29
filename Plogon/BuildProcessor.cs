@@ -236,37 +236,41 @@ public class BuildProcessor
             }
         }
 
-        if (host.Host == "github.com")
-        {
-            return $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
-        }
-        
-        var diffPsi = new ProcessStartInfo("git",
-            $"diff --submodule=diff {haveCommit}..{wantCommit}")
-        {
-            RedirectStandardOutput = true,
-            WorkingDirectory = workDir.FullName,
-        };
-
-        var process = Process.Start(diffPsi);
-        if (process == null)
-            throw new Exception("Diff process was null.");
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-        
-        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
-
         using var client = new HttpClient();
-        var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
-        res.EnsureSuccessStatusCode();
 
-        var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+        switch (host.Host)
+        {
+            case "github.com":
+                return $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
+            case "gitlab.com":
+                return $"{host.AbsoluteUri[..^4]}/-/compare/{haveCommit}...{wantCommit}";
+            default:
+                var diffPsi = new ProcessStartInfo("git",
+                    $"diff --submodule=diff {haveCommit}..{wantCommit}")
+                {
+                    RedirectStandardOutput = true,
+                    WorkingDirectory = workDir.FullName,
+                };
 
-        return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+                var process = Process.Start(diffPsi);
+                if (process == null)
+                    throw new Exception("Diff process was null.");
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+
+                await process.WaitForExitAsync();
+                if (process.ExitCode != 0)
+                    throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+        
+                Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
+
+                var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
+                res.EnsureSuccessStatusCode();
+
+                var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+
+                return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+        }
     }
 
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
