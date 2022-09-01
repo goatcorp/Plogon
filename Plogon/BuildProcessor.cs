@@ -228,9 +228,11 @@ public class BuildProcessor
     
     private async Task<string> GetDiffUrl(DirectoryInfo workDir, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
     {
+        const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        
         if (string.IsNullOrEmpty(haveCommit))
         {
-            haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
+            haveCommit = emptyTree; // "empty tree"
             
             var removeTask = tasks.FirstOrDefault(x =>
                 x.InternalName == internalName && x.Type == BuildTask.TaskType.Remove);
@@ -240,6 +242,10 @@ public class BuildProcessor
                 Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
             }
         }
+        
+        // Check if relevant commit is still in the repo
+        if (!await CheckCommitExists(workDir, haveCommit))
+            haveCommit = emptyTree;
         
         var diffPsi = new ProcessStartInfo("git",
             $"diff --submodule=diff {haveCommit}..{wantCommit}")
@@ -267,6 +273,23 @@ public class BuildProcessor
         var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
 
         return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+    }
+    
+    private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"cat-file -e {commit}^{{commit}}")
+        {
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Cat-file process was null.");
+
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0;
     }
 
     private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
