@@ -35,8 +35,8 @@ public class BuildProcessor
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
-        "Lumina.dll",
-        "Lumina.Excel.dll",
+        // "Lumina.dll",
+        // "Lumina.Excel.dll",
         "ImGui.NET.dll",
         "ImGuiScene.dll",
     };
