@@ -181,9 +181,9 @@ class Program
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl);
 
-                            if (status.Version == task.HaveVersion && task.HaveVersion != null)
+                            if (status.Version <= task.HaveVersion && task.HaveVersion != null)
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Same version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
