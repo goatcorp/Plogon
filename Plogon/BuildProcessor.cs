@@ -35,8 +35,8 @@ public class BuildProcessor
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
-        "Lumina.dll",
-        "Lumina.Excel.dll",
+        // "Lumina.dll",
+        // "Lumina.Excel.dll",
         "ImGui.NET.dll",
         "ImGuiScene.dll",
     };
@@ -232,10 +232,11 @@ public class BuildProcessor
         var haveCommit = task.HaveCommit;
         var wantCommit = task.Manifest!.Plugin.Commit;
         var host = new Uri(task.Manifest!.Plugin.Repository);
-
+        const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        
         if (string.IsNullOrEmpty(haveCommit))
         {
-            haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
+            haveCommit = emptyTree; // "empty tree"
             
             var removeTask = tasks.FirstOrDefault(x =>
                 x.InternalName == internalName && x.Type == BuildTask.TaskType.Remove);
@@ -255,6 +256,10 @@ public class BuildProcessor
             case "gitlab.com":
                 return $"{host.AbsoluteUri[..^4]}/-/compare/{haveCommit}...{wantCommit}";
             default:
+                // Check if relevant commit is still in the repo
+                if (!await CheckCommitExists(workDir, haveCommit))
+                    haveCommit = emptyTree;
+                    
                 var diffPsi = new ProcessStartInfo("git",
                     $"diff --submodule=diff {haveCommit}..{wantCommit}")
                 {
@@ -281,6 +286,23 @@ public class BuildProcessor
 
                 return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
         }
+    }
+    
+    private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"cat-file -e {commit}^{{commit}}")
+        {
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Cat-file process was null.");
+
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0;
     }
 
     private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)

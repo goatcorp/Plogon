@@ -93,10 +93,6 @@ public class GitHubApi
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<IssueResponse>();
-        if (body?.Body == null)
-            throw new Exception("Couldn't read issue body.");
-        
-
-        return body.Body;
+        return body?.Body ?? string.Empty;
     }
 }

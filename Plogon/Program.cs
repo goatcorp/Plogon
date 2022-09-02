@@ -228,6 +228,12 @@ class Program
                 githubSummary += imagesMd.ToString();
 
                 var actionRunId = Environment.GetEnvironmentVariable("GITHUB_RUN_ID");
+
+                string ReplaceDiscordEmotes(string text)
+                {
+                    text = text.Replace("✔️", "<:yeah:980227103725342810>");
+                    return text;
+                }
                 
                 if (repoName != null && prNumber != null)
                 {
@@ -263,7 +269,7 @@ class Program
                     }
 
                     buildInfo += anyTried ? buildsMd.GetText(true) : "No builds made.";
-                    buildInfo = buildInfo.Replace("✔️", "<:yeah:980227103725342810>");
+                    buildInfo = ReplaceDiscordEmotes(buildInfo);
                     
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
                     var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
@@ -278,7 +284,7 @@ class Program
 
                 if (repoName != null && commit && anyTried)
                 {
-                    await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{buildsMd.GetText(true)}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
+                    await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
                     
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
@@ -305,10 +311,26 @@ class Program
                                     .WithColor(Color.LightGrey)
                                     .WithTitle(embed.Title)
                                     .WithCurrentTimestamp()
-                                    .WithFooter("Committed")
-                                    .WithDescription(embed.Description)
-                                    .Build();
-                                properties.Embeds = new[] { newEmbed };
+                                    .WithDescription(embed.Description);
+
+                                if (embed.Author.HasValue)
+                                    newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name, embed.Author.Value.IconUrl,
+                                        embed.Author.Value.Url);
+
+                                if (embed.Footer.HasValue)
+                                {
+                                    if (embed.Footer.Value.Text.Contains("Comment"))
+                                    {
+                                        newEmbed = newEmbed.WithFooter(embed.Footer.Value.Text.Replace("Comment", "Committed"),
+                                            embed.Footer.Value.IconUrl);
+                                    }
+                                    else
+                                    {
+                                        newEmbed = newEmbed.WithFooter("Committed");
+                                    }
+                                }
+
+                                properties.Embeds = new[] { newEmbed.Build() };
                             });
                         }
                     }
