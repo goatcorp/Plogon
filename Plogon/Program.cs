@@ -181,7 +181,7 @@ class Program
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl);
 
-                            if (status.Version <= task.HaveVersion && task.HaveVersion != null)
+                            if (task.HaveVersion != null && Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
                             {
                                 buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
