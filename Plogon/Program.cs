@@ -11,6 +11,8 @@ namespace Plogon;
 
 class Program
 {
+    private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "Caraxi", "karashiiro", "philpax" };
+    
     /// <summary>
     /// The main entry point for the application.
     /// </summary>
@@ -148,7 +150,7 @@ class Program
                         
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin!.Commit})");
 
-                        if (!buildAll && task.Manifest.Plugin.Owners.All(x => x != actor))
+                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) && AlwaysBuildUsers.All(x => x != actor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
