@@ -234,6 +234,7 @@ class Program
                 string ReplaceDiscordEmotes(string text)
                 {
                     text = text.Replace("✔️", "<:yeah:980227103725342810>");
+                    text = text.Replace("❌", "<:whaaa:980227735421079622>");
                     return text;
                 }
                 

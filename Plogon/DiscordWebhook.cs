@@ -23,7 +23,7 @@ public class DiscordWebhook
         this.Client = new DiscordWebhookClient(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
     }
 
-    public static DateTime GetPacificStandardTime()
+    private static DateTime GetPacificStandardTime()
     {
         var utc = DateTime.UtcNow;
         var pacificZone = TimeZoneInfo.FindSystemTimeZoneById("America/Los_Angeles");
