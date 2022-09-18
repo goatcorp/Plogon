@@ -226,8 +226,12 @@ public class BuildProcessor
         public string? Key { get; set; }
     };
     
-    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string internalName, string haveCommit, string wantCommit, ISet<BuildTask> tasks)
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
+        var internalName = task.InternalName;
+        var haveCommit = task.HaveCommit;
+        var wantCommit = task.Manifest!.Plugin.Commit;
+        var host = new Uri(task.Manifest!.Plugin.Repository);
         const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
         
         if (string.IsNullOrEmpty(haveCommit))
@@ -242,37 +246,46 @@ public class BuildProcessor
                 Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
             }
         }
-        
-        // Check if relevant commit is still in the repo
-        if (!await CheckCommitExists(workDir, haveCommit))
-            haveCommit = emptyTree;
-        
-        var diffPsi = new ProcessStartInfo("git",
-            $"diff --submodule=diff {haveCommit}..{wantCommit}")
-        {
-            RedirectStandardOutput = true,
-            WorkingDirectory = workDir.FullName,
-        };
-
-        var process = Process.Start(diffPsi);
-        if (process == null)
-            throw new Exception("Diff process was null.");
-
-        var output = await process.StandardOutput.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-        
-        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
 
         using var client = new HttpClient();
-        var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
-        res.EnsureSuccessStatusCode();
 
-        var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+        switch (host.Host)
+        {
+            case "github.com":
+                return $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
+            case "gitlab.com":
+                return $"{host.AbsoluteUri[..^4]}/-/compare/{haveCommit}...{wantCommit}";
+            default:
+                // Check if relevant commit is still in the repo
+                if (!await CheckCommitExists(workDir, haveCommit))
+                    haveCommit = emptyTree;
+                    
+                var diffPsi = new ProcessStartInfo("git",
+                    $"diff --submodule=diff {haveCommit}..{wantCommit}")
+                {
+                    RedirectStandardOutput = true,
+                    WorkingDirectory = workDir.FullName,
+                };
 
-        return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+                var process = Process.Start(diffPsi);
+                if (process == null)
+                    throw new Exception("Diff process was null.");
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+
+                await process.WaitForExitAsync();
+                if (process.ExitCode != 0)
+                    throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+        
+                Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
+
+                var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
+                res.EnsureSuccessStatusCode();
+
+                var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+
+                return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+        }
     }
     
     private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
@@ -465,11 +478,11 @@ public class BuildProcessor
                 Init = true,
             });
         }
-
+        
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
-        var diffUrl = await GetDiffUrl(work, task.InternalName, task.HaveCommit!, task.Manifest.Plugin.Commit, otherTasks);
+        var diffUrl = await GetDiffUrl(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
