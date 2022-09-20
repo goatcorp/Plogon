@@ -302,39 +302,48 @@ class Program
                             Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName, buildResult.Version);
                             continue;
                         }
-                        
-                        var msgIds = await webservices.GetMessageIds(resultPrNum);
 
-                        foreach (var id in msgIds)
+                        try
                         {
-                            await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
+                            var msgIds = await webservices.GetMessageIds(resultPrNum);
+
+                            foreach (var id in msgIds)
                             {
-                                var embed = properties.Embeds.Value.First();
-                                var newEmbed = new EmbedBuilder()
-                                    .WithColor(Color.LightGrey)
-                                    .WithTitle(embed.Title)
-                                    .WithCurrentTimestamp()
-                                    .WithDescription(embed.Description);
-
-                                if (embed.Author.HasValue)
-                                    newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name, embed.Author.Value.IconUrl,
-                                        embed.Author.Value.Url);
-
-                                if (embed.Footer.HasValue)
+                                await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
                                 {
-                                    if (embed.Footer.Value.Text.Contains("Comment"))
-                                    {
-                                        newEmbed = newEmbed.WithFooter(embed.Footer.Value.Text.Replace("Comment", "Committed"),
-                                            embed.Footer.Value.IconUrl);
-                                    }
-                                    else
-                                    {
-                                        newEmbed = newEmbed.WithFooter("Committed");
-                                    }
-                                }
+                                    var embed = properties.Embeds.Value.First();
+                                    var newEmbed = new EmbedBuilder()
+                                        .WithColor(Color.LightGrey)
+                                        .WithTitle(embed.Title)
+                                        .WithCurrentTimestamp()
+                                        .WithDescription(embed.Description);
 
-                                properties.Embeds = new[] { newEmbed.Build() };
-                            });
+                                    if (embed.Author.HasValue)
+                                        newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name,
+                                            embed.Author.Value.IconUrl,
+                                            embed.Author.Value.Url);
+
+                                    if (embed.Footer.HasValue)
+                                    {
+                                        if (embed.Footer.Value.Text.Contains("Comment"))
+                                        {
+                                            newEmbed = newEmbed.WithFooter(
+                                                embed.Footer.Value.Text.Replace("Comment", "Committed"),
+                                                embed.Footer.Value.IconUrl);
+                                        }
+                                        else
+                                        {
+                                            newEmbed = newEmbed.WithFooter("Committed");
+                                        }
+                                    }
+
+                                    properties.Embeds = new[] { newEmbed.Build() };
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Error(ex, "Could not update messages");
                         }
                     }
                 }
