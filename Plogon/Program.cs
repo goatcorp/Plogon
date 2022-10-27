@@ -106,13 +106,26 @@ class Program
                 
                 foreach (var task in tasks)
                 {
-                    var fancyCommit = "n/a";
+                    string? fancyCommit = null;
                     if (task.Manifest?.Plugin?.Commit != null)
                     {
                         fancyCommit = task.Manifest.Plugin.Commit.Length > 7 ? 
                             task.Manifest.Plugin.Commit[..7] : 
                             task.Manifest.Plugin.Commit;
+                        
+                        if (task.IsGitHub)
+                        {
+                            var url = task.Manifest!.Plugin!.Repository.Replace(".git", string.Empty);
+                            fancyCommit = $"[{fancyCommit}]({url}/commit/{task.Manifest.Plugin.Commit})";
+                        }
+                        else if (task.IsGitLab)
+                        {
+                            var url = task.Manifest!.Plugin!.Repository.Replace(".git", string.Empty);
+                            fancyCommit = $"[{fancyCommit}]({url}/-/commit/{task.Manifest.Plugin.Commit})";
+                        }
                     }
+
+                    fancyCommit ??= "n/a";
                     
                     if (aborted)
                     {
