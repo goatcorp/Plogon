@@ -119,7 +119,7 @@ public class BuildProcessor
         {
             foreach (var plugin in channel.Value.Plugins)
             {
-                if (this.manifestStorage.Channels.ContainsKey(channel.Key))
+                if (!this.manifestStorage.Channels.ContainsKey(channel.Key))
                 {
                     Log.Information("Channel {ChannelName} not found in manifests. If it was decommissioned, this is okay.", channel.Key);
                     continue;
