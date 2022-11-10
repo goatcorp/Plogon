@@ -67,17 +67,18 @@ class Program
             {
                 Log.Information("Diff for PR is not available, this might lead to unnecessary builds being performed.");
             }
-            
-            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder, artifactFolder, prDiff);
+
+            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
+                artifactFolder, prDiff);
             var tasks = buildProcessor.GetBuildTasks();
-            
+
             GitHubOutputBuilder.StartGroup("List all tasks");
 
             foreach (var buildTask in tasks)
             {
                 Log.Information(buildTask.ToString());
             }
-            
+
             GitHubOutputBuilder.EndGroup();
 
             if (!tasks.Any())
@@ -99,20 +100,20 @@ class Program
                 }
 
                 GitHubOutputBuilder.EndGroup();
-                
+
                 githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
-                
+
                 foreach (var task in tasks)
                 {
                     string? fancyCommit = null;
                     if (task.Manifest?.Plugin?.Commit != null)
                     {
-                        fancyCommit = task.Manifest.Plugin.Commit.Length > 7 ? 
-                            task.Manifest.Plugin.Commit[..7] : 
-                            task.Manifest.Plugin.Commit;
-                        
+                        fancyCommit = task.Manifest.Plugin.Commit.Length > 7
+                            ? task.Manifest.Plugin.Commit[..7]
+                            : task.Manifest.Plugin.Commit;
+
                         if (task.IsGitHub)
                         {
                             var url = task.Manifest!.Plugin!.Repository.Replace(".git", string.Empty);
@@ -126,7 +127,7 @@ class Program
                     }
 
                     fancyCommit ??= "n/a";
-                    
+
                     if (aborted)
                     {
                         Log.Information("Aborted, won't run: {Name}", task.InternalName);
@@ -134,20 +135,20 @@ class Program
                         buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Not ran");
                         continue;
                     }
-                    
+
                     try
                     {
                         if (task.Type == BuildTask.TaskType.Remove)
                         {
                             if (!commit)
                                 continue;
-                            
+
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
                             var removeStatus = await buildProcessor.ProcessTask(task, commit, null, tasks);
                             statuses.Add(removeStatus);
-                            
+
                             if (removeStatus.Success)
                             {
                                 buildsMd.AddRow("🚮", $"{task.InternalName} [{task.Channel}]", "n/a", "Removed");
@@ -156,14 +157,15 @@ class Program
                             {
                                 buildsMd.AddRow("🚯", $"{task.InternalName} [{task.Channel}]", "n/a", "Removal failed");
                             }
-                            
+
                             GitHubOutputBuilder.EndGroup();
                             continue;
                         }
-                        
+
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin!.Commit})");
 
-                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) && AlwaysBuildUsers.All(x => x != actor)))
+                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) &&
+                                          AlwaysBuildUsers.All(x => x != actor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
@@ -171,23 +173,25 @@ class Program
 
                             // Only complain if the last build was less recent, indicates configuration error
                             if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
-                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Not your plugin");
-                        
+                                buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                    "Not your plugin");
+
                             continue;
                         }
-                        
+
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
                         anyTried = true;
-                        
+
                         var changelog = task.Manifest.Plugin.Changelog;
-                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null && gitHubApi != null && commit)
+                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null &&
+                            gitHubApi != null && commit)
                         {
                             changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
                         }
-                        
+
                         var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
                         statuses.Add(status);
 
@@ -196,13 +200,16 @@ class Program
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl);
 
-                            if (task.HaveVersion != null && Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
+                            if (task.HaveVersion != null &&
+                                Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                    $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
-                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"v{status.Version} - [Diff]({status.DiffUrl})");
+                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                    $"v{status.Version} - [Diff]({status.DiffUrl})");
 
                                 if (!string.IsNullOrEmpty(prNumber) && !commit)
                                     await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
@@ -212,8 +219,9 @@ class Program
                         {
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
                                 task.Manifest.Plugin.Commit);
-                            
-                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Build failed ([Diff]({status.DiffUrl}))");
+
+                            buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                $"Build failed ([Diff]({status.DiffUrl}))");
                             anyFailed = true;
                         }
                     }
@@ -221,16 +229,18 @@ class Program
                     {
                         // We just can't make sure that the state of the repo is consistent here...
                         // Need to abort.
-                        
+
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
-                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Could not commit to repo");
+                        buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                            "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
-                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Build system error: {ex.Message}");
+                        buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                            $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 
@@ -250,18 +260,20 @@ class Program
                     text = text.Replace("❌", "<:whaaa:980227735421079622>");
                     return text;
                 }
-                
+
                 if (repoName != null && prNumber != null)
                 {
                     var existingMessages = await webservices.GetMessageIds(prNumber);
                     var alreadyPosted = existingMessages.Length > 0;
-                    
-                    var links = $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
+
+                    var links =
+                        $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
                     if (!anyTried)
-                        commentText = "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
-                    
+                        commentText =
+                            "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
+
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
                         commentText + "\n\n" + buildsMd + "\n##### " + links);
 
@@ -286,22 +298,27 @@ class Program
 
                     buildInfo += anyTried ? buildsMd.GetText(true) : "No builds made.";
                     buildInfo = ReplaceDiscordEmotes(buildInfo);
-                    
+
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
                     var numBuildTasks = tasks.Count(x => x.Type == BuildTask.TaskType.Build);
-                    
+
                     if (nameTask != null)
-                        hookTitle += $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
+                        hookTitle +=
+                            $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    var id = await webhook.Send(ok ? Color.Purple : Color.Red, $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})", hookTitle, ok ? "Accepted" : "Rejected");
+                    var id = await webhook.Send(ok ? Color.Purple : Color.Red,
+                        $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
+                        hookTitle, ok ? "Accepted" : "Rejected");
                     await webservices.RegisterMessageId(prNumber!, id);
                 }
 
                 if (repoName != null && commit && anyTried)
                 {
-                    await webhook.Send(!anyFailed ? Color.Green : Color.Red, $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})", "Builds committed", string.Empty);
-                    
+                    await webhook.Send(!anyFailed ? Color.Green : Color.Red,
+                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
+                        "Builds committed", string.Empty);
+
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
                     {
@@ -312,7 +329,8 @@ class Program
                             await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Version!);
                         if (resultPrNum == null)
                         {
-                            Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName, buildResult.Version);
+                            Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName,
+                                buildResult.Version);
                             continue;
                         }
 
@@ -361,6 +379,10 @@ class Program
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Failed during init");
         }
         finally
         {
