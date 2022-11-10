@@ -89,22 +89,35 @@ public class BuildProcessor
         if (needExtendedImage)
         {
             using var client = new HttpClient();
-            
-            Log.Information("Need the extended image, getting now...");
 
-            var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-            await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+            var cacheFolder = new DirectoryInfo("cache");
+            if (!cacheFolder.Exists)
+                cacheFolder.Create();
             
-            /*
-            var fileToWriteTo = Path.GetTempFileName();
-            await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
-            
-            await streamToReadFrom.CopyToAsync(streamToWriteTo);
-            */
+            var imageFile = new FileInfo(Path.Combine(cacheFolder.FullName, "extended-image.tar.bz2"));
+            Stream? loadStream = null;
+            if (imageFile.Exists)
+            {
+                loadStream = File.OpenRead(imageFile.FullName);
+                Log.Information("Opened extended image from cache: {Path}", imageFile.FullName);
+            }
+            else
+            {
+                var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
+                using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+                
+                await using Stream streamToWriteTo = File.Open(imageFile.FullName, FileMode.Create);
+                
+                await streamToReadFrom.CopyToAsync(streamToWriteTo);
+                streamToWriteTo.Close();
+                
+                loadStream = File.OpenRead(imageFile.FullName);
+                Log.Information("Downloaded extended image to cache: {Path}", imageFile.FullName);
+            }
 
-            await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), streamToReadFrom,
+            await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), loadStream,
                 new Progress<JSONMessage>(progress =>
                 {
                     Log.Verbose("Docker image load ({Id}): {Status}", progress.ID, progress.Status);
