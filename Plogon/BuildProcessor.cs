@@ -90,7 +90,7 @@ public class BuildProcessor
         {
             using var client = new HttpClient();
 
-            var cacheFolder = new DirectoryInfo("cache");
+            var cacheFolder = new DirectoryInfo("~/.plogon_cache");
             if (!cacheFolder.Exists)
                 cacheFolder.Create();
             
