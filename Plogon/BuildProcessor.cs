@@ -89,6 +89,8 @@ public class BuildProcessor
         if (needExtendedImage)
         {
             using var client = new HttpClient();
+            
+            Log.Information("Need the extended image, getting now...");
 
             var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -249,6 +251,34 @@ public class BuildProcessor
         
         // fetch runtime packages
         await Task.WhenAll(runtimeDependencies.Select(dependency => GetDependency(dependency.Item1, new() { Resolved = dependency.Item2 }, pkgFolder, client)));
+    }
+
+    async Task GetNeeds(BuildTask task, DirectoryInfo needs)
+    {
+        if (task.Manifest?.Build?.Needs.Any() == false)
+            return;
+        
+        using var client = new HttpClient();
+
+        foreach (var need in task.Manifest!.Build!.Needs)
+        {
+            using var response = await client.GetAsync(need.Url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+            await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+
+            if (need.Dest!.Contains(".."))
+                throw new Exception();
+            
+            var fileToWriteTo = Path.Combine(needs.FullName, need.Dest!);
+            {
+                await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
+            
+                await streamToReadFrom.CopyToAsync(streamToWriteTo);
+                streamToWriteTo.Close();
+            }
+            
+            Log.Information("Downloaded need {Url} to {Dest}", need.Url, need.Dest);
+        }
     }
 
     private class HasteResponse
@@ -469,6 +499,7 @@ public class BuildProcessor
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
         var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
+        var needs = this.workFolder.CreateSubdirectory($"{folderName}-needs");
 
         Debug.Assert(staticFolder.Exists);
 
@@ -517,6 +548,7 @@ public class BuildProcessor
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
+        await GetNeeds(task, needs);
         await RestoreAllPackages(task, work, packages);
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
         
@@ -541,6 +573,7 @@ public class BuildProcessor
                         $"{staticFolder.FullName}:/static:ro",
                         $"{output.FullName}:/output",
                         $"{packages.FullName}:/packages:ro",
+                        $"{needs.FullName}:/needs:ro"
                     }
                 },
                 Env = new List<string>
