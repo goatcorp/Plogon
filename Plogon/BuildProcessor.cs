@@ -45,12 +45,16 @@ public class BuildProcessor
     private ManifestStorage manifestStorage;
     private DalamudReleases dalamudReleases;
 
+    private bool needExtendedImage;
+
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
     // This has to match the SDK's version identified by DOCKER_TAG
     // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
     private const string RUNTIME_VERSION = "6.0.5";
 
+    private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
+    
     /// <summary>
     /// Set up build processor
     /// </summary>
@@ -82,6 +86,29 @@ public class BuildProcessor
     /// <returns>List of images</returns>
     public async Task<List<ImageInspectResponse>> SetupDockerImage()
     {
+        if (needExtendedImage)
+        {
+            using var client = new HttpClient();
+
+            var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+            await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+            
+            /*
+            var fileToWriteTo = Path.GetTempFileName();
+            await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
+            
+            await streamToReadFrom.CopyToAsync(streamToWriteTo);
+            */
+
+            await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), streamToReadFrom,
+                new Progress<JSONMessage>(progress =>
+                {
+                    Log.Verbose("Docker image load ({Id}): {Status}", progress.ID, progress.Status);
+                }));
+        }
+        
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
             {
                 FromImage = DOCKER_IMAGE,
@@ -158,6 +185,8 @@ public class BuildProcessor
                 }
             }
         }
+
+        needExtendedImage = tasks.Any(x => x.Manifest?.Build?.Image == "extended");
 
         return tasks;
     }
@@ -489,11 +518,12 @@ public class BuildProcessor
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
         await RestoreAllPackages(task, work, packages);
+        var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
         
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
-                Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+                Image = needsExtendedImage ? EXTENDED_IMAGE_HASH : $"{DOCKER_IMAGE}:{DOCKER_TAG}",
                 
                 NetworkDisabled = true,
 
