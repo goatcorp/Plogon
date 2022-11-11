@@ -268,7 +268,7 @@ public class BuildProcessor
 
     async Task GetNeeds(BuildTask task, DirectoryInfo needs)
     {
-        if (task.Manifest?.Build?.Needs.Any() == false)
+        if (!task.Manifest?.Build?.Needs.Any() ?? false)
             return;
         
         using var client = new HttpClient();
