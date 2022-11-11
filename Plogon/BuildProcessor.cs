@@ -268,7 +268,7 @@ public class BuildProcessor
 
     async Task GetNeeds(BuildTask task, DirectoryInfo needs)
     {
-        if (!task.Manifest?.Build?.Needs.Any() ?? false)
+        if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
             return;
         
         using var client = new HttpClient();
@@ -591,7 +591,7 @@ public class BuildProcessor
                 },
                 Env = new List<string>
                 {
-                    $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
+                    $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
                     $"PLOGON_PLUGIN_NAME={task.InternalName}",
                     $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
                     $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
