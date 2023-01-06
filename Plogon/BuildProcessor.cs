@@ -48,10 +48,10 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "6.0.300";
+    private const string DOCKER_TAG = "7.0.101";
     // This has to match the SDK's version identified by DOCKER_TAG
     // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
-    private const string RUNTIME_VERSION = "6.0.5";
+    private const string RUNTIME_VERSION = "7.0.0";
 
     private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
     
