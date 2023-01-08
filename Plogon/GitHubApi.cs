@@ -4,7 +4,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using System.Transactions;
 using Serilog;
 
 namespace Plogon;
@@ -74,7 +73,7 @@ public class GitHubApi
 
     private class IssueResponse
     {
-        [JsonPropertyName("body")] public string? Body { get; } = null!;
+        [JsonPropertyName("body")] public string? Body { get; set; }
     }
 
     /// <summary>
@@ -89,14 +88,11 @@ public class GitHubApi
         var request = new HttpRequestMessage(HttpMethod.Get,
             $"https://api.github.com/repos/{repo}/issues/{issueNumber}");
         var response = await this.client.SendAsync(request);
-        //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+        Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
         
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadFromJsonAsync<IssueResponse>();
-        if (body?.Body == null)
-            throw new Exception("Couldn't read issue body.");
-
-        return body.Body;
+        return body?.Body ?? string.Empty;
     }
 }

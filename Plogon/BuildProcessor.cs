@@ -29,13 +29,23 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-
-
+    
     private readonly DockerClient dockerClient;
+
+    private static readonly string[] DalamudInternalDll = new[]
+    {
+        "Dalamud.dll",
+        // "Lumina.dll",
+        // "Lumina.Excel.dll",
+        "ImGui.NET.dll",
+        "ImGuiScene.dll",
+    };
 
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
     private DalamudReleases dalamudReleases;
+
+    private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "6.0.300";
@@ -43,6 +53,8 @@ public class BuildProcessor
     // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
     private const string RUNTIME_VERSION = "6.0.5";
 
+    private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
+    
     /// <summary>
     /// Set up build processor
     /// </summary>
@@ -62,8 +74,8 @@ public class BuildProcessor
         this.artifactFolder = artifactFolder;
 
         this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff);
-        this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"));
+        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
+        this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"), manifestFolder);
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
@@ -74,6 +86,44 @@ public class BuildProcessor
     /// <returns>List of images</returns>
     public async Task<List<ImageInspectResponse>> SetupDockerImage()
     {
+        if (needExtendedImage)
+        {
+            using var client = new HttpClient();
+
+            var cacheFolder = new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".plogon_cache"));
+            if (!cacheFolder.Exists)
+                cacheFolder.Create();
+            
+            var imageFile = new FileInfo(Path.Combine(cacheFolder.FullName, "extended-image.tar.bz2"));
+            Stream? loadStream = null;
+            if (imageFile.Exists)
+            {
+                loadStream = File.OpenRead(imageFile.FullName);
+                Log.Information("Opened extended image from cache: {Path}", imageFile.FullName);
+            }
+            else
+            {
+                var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
+                using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+                await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+                
+                await using Stream streamToWriteTo = File.Open(imageFile.FullName, FileMode.Create);
+                
+                await streamToReadFrom.CopyToAsync(streamToWriteTo);
+                streamToWriteTo.Close();
+                
+                loadStream = File.OpenRead(imageFile.FullName);
+                Log.Information("Downloaded extended image to cache: {Path}", imageFile.FullName);
+            }
+
+            await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), loadStream,
+                new Progress<JSONMessage>(progress =>
+                {
+                    Log.Verbose("Docker image load ({Id}): {Status}", progress.ID, progress.Status);
+                }));
+        }
+        
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
             {
                 FromImage = DOCKER_IMAGE,
@@ -111,14 +161,16 @@ public class BuildProcessor
         {
             foreach (var plugin in channel.Value.Plugins)
             {
-                if (this.manifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
+                // Channel decommissioned or no longer in manifests
+                if (!this.manifestStorage.Channels.ContainsKey(channel.Key) ||
+                    this.manifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
                 {
                     tasks.Add(new BuildTask
                     {
                         InternalName = plugin.Key,
                         Manifest = null,
                         Channel = channel.Key,
-                        HaveCommit = null,
+                        HaveCommit = plugin.Value.BuiltCommit,
                         HaveTimeBuilt = null,
                         HaveVersion = null,
                         Type = BuildTask.TaskType.Remove,
@@ -148,6 +200,8 @@ public class BuildProcessor
                 }
             }
         }
+
+        needExtendedImage = tasks.Any(x => x.Manifest?.Build?.Image == "extended");
 
         return tasks;
     }
@@ -197,6 +251,8 @@ public class BuildProcessor
         foreach (var file in lockFiles)
         {
             var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(file.FullName));
+            if (lockFileData == null)
+                throw new Exception($"Lockfile did not deserialize: {file.FullName}");
 
             if (lockFileData.Version != 1)
                 throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
@@ -210,47 +266,138 @@ public class BuildProcessor
         await Task.WhenAll(runtimeDependencies.Select(dependency => GetDependency(dependency.Item1, new() { Resolved = dependency.Item2 }, pkgFolder, client)));
     }
 
+    async Task GetNeeds(BuildTask task, DirectoryInfo needs)
+    {
+        if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
+            return;
+        
+        using var client = new HttpClient();
+
+        foreach (var need in task.Manifest!.Build!.Needs)
+        {
+            using var response = await client.GetAsync(need.Url, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+            await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
+
+            if (need.Dest!.Contains(".."))
+                throw new Exception();
+            
+            var fileToWriteTo = Path.Combine(needs.FullName, need.Dest!);
+            {
+                await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
+            
+                await streamToReadFrom.CopyToAsync(streamToWriteTo);
+                streamToWriteTo.Close();
+            }
+            
+            Log.Information("Downloaded need {Url} to {Dest}", need.Url, need.Dest);
+        }
+    }
+
     private class HasteResponse
     {
         [JsonPropertyName("key")]
         public string? Key { get; set; }
     };
     
-    private async Task<string> GetDiffUrl(DirectoryInfo workDir, string haveCommit, string wantCommit)
+    private async Task<string> GetDiffUrl(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
+        var internalName = task.InternalName;
+        var haveCommit = task.HaveCommit;
+        var wantCommit = task.Manifest!.Plugin.Commit;
+        var host = new Uri(task.Manifest!.Plugin.Repository);
+        const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+        
         if (string.IsNullOrEmpty(haveCommit))
         {
-            haveCommit = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"; // "empty tree"
+            haveCommit = emptyTree; // "empty tree"
+            
+            var removeTask = tasks.FirstOrDefault(x =>
+                x.InternalName == internalName && x.Type == BuildTask.TaskType.Remove);
+            if (removeTask != null)
+            {
+                haveCommit = removeTask.HaveCommit!;
+                Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
+            }
         }
+
+        using var client = new HttpClient();
+
+        switch (host.Host)
+        {
+            case "github.com":
+                return $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
+            case "gitlab.com":
+                return $"{host.AbsoluteUri[..^4]}/-/compare/{haveCommit}...{wantCommit}";
+            default:
+                // Check if relevant commit is still in the repo
+                if (!await CheckCommitExists(workDir, haveCommit))
+                    haveCommit = emptyTree;
+                    
+                var diffPsi = new ProcessStartInfo("git",
+                    $"diff --submodule=diff {haveCommit}..{wantCommit}")
+                {
+                    RedirectStandardOutput = true,
+                    WorkingDirectory = workDir.FullName,
+                };
+
+                var process = Process.Start(diffPsi);
+                if (process == null)
+                    throw new Exception("Diff process was null.");
+
+                var output = await process.StandardOutput.ReadToEndAsync();
+
+                await process.WaitForExitAsync();
+                if (process.ExitCode != 0)
+                    throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
         
-        var diffPsi = new ProcessStartInfo("git",
-            $"diff --submodule=diff {haveCommit}..{wantCommit}")
+                Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
+
+                var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
+                res.EnsureSuccessStatusCode();
+
+                var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+
+                return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+        }
+    }
+    
+    private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"cat-file -e {commit}^{{commit}}")
+        {
+            WorkingDirectory = workDir.FullName,
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
+            throw new Exception("Cat-file process was null.");
+
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0;
+    }
+
+    private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
+    {
+        var psi = new ProcessStartInfo("git",
+            $"rev-parse --symbolic-full-name {commit}")
         {
             RedirectStandardOutput = true,
             WorkingDirectory = workDir.FullName,
         };
 
-        var process = Process.Start(diffPsi);
+        var process = Process.Start(psi);
         if (process == null)
-            throw new Exception("Diff process was null.");
-
-        var output = await process.StandardOutput.ReadToEndAsync();
+            throw new Exception("rev-parse process was null.");
 
         await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-        
-        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
+        var output = await process.StandardOutput.ReadToEndAsync();
 
-        using var client = new HttpClient();
-        var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
-        res.EnsureSuccessStatusCode();
-
-        var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
-
-        return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+        return string.IsNullOrEmpty(output);
     }
-
+    
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
     {
         HashSet<Tuple<string, string>> dependencies = new();
@@ -297,11 +444,13 @@ public class BuildProcessor
         /// <param name="success">If it worked</param>
         /// <param name="diffUrl">diff url</param>
         /// <param name="version">plugin version</param>
-        public BuildResult(bool success, string? diffUrl, string? version)
+        /// <param name="task">processed task</param>
+        public BuildResult(bool success, string? diffUrl, string? version, BuildTask task)
         {
             this.Success = success;
             this.DiffUrl = diffUrl;
             this.Version = version;
+            this.Task = task;
         }
         
         /// <summary>
@@ -318,6 +467,11 @@ public class BuildProcessor
         /// The version of the plugin artifact
         /// </summary>
         public string? Version { get; private set; }
+        
+        /// <summary>
+        /// The task that was processed
+        /// </summary>
+        public BuildTask Task { get; private set; }
     }
 
     private class LegacyPluginManifest
@@ -332,10 +486,11 @@ public class BuildProcessor
     /// <param name="task">The task to build</param>
     /// <param name="commit">Whether or not the plugin should be committed to the repo</param>
     /// <param name="changelog">The plugin changelog</param>
+    /// <param name="otherTasks">All other queued tasks</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, ISet<BuildTask> otherTasks)
     {
         if (task.Type == BuildTask.TaskType.Remove)
         {
@@ -347,7 +502,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, null);
+            return new BuildResult(true, null, null, task);
         }
 
         if (task.Manifest == null)
@@ -357,6 +512,7 @@ public class BuildProcessor
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
         var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
+        var needs = this.workFolder.CreateSubdirectory($"{folderName}-needs");
 
         Debug.Assert(staticFolder.Exists);
 
@@ -398,16 +554,21 @@ public class BuildProcessor
             });
         }
         
-        var diffUrl = await GetDiffUrl(work, task.HaveCommit!, task.Manifest.Plugin.Commit);
+        if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
+            throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
+
+        var diffUrl = await GetDiffUrl(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
+        await GetNeeds(task, needs);
         await RestoreAllPackages(task, work, packages);
+        var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
         
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
-                Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+                Image = needsExtendedImage ? EXTENDED_IMAGE_HASH : $"{DOCKER_IMAGE}:{DOCKER_TAG}",
                 
                 NetworkDisabled = true,
 
@@ -425,11 +586,12 @@ public class BuildProcessor
                         $"{staticFolder.FullName}:/static:ro",
                         $"{output.FullName}:/output",
                         $"{packages.FullName}:/packages:ro",
+                        $"{needs.FullName}:/needs:ro"
                     }
                 },
                 Env = new List<string>
                 {
-                    $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
+                    $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
                     $"PLOGON_PLUGIN_NAME={task.InternalName}",
                     $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
                     $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
@@ -489,6 +651,15 @@ public class BuildProcessor
                 Force = true,
             });
 
+        var outputFiles = output.GetFiles("*.dll", SearchOption.AllDirectories);
+        foreach (var outputFile in outputFiles)
+        {
+            if (DalamudInternalDll.Any(x => x == outputFile.Name))
+            {
+                throw new Exception($"Build is emitting Dalamud-internal DLL({outputFile.Name}), this will cause issues.");
+            }
+        }
+
         var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
         string? version = null;
 
@@ -541,6 +712,9 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
+                    if (task.Manifest.Directory == null)
+                        throw new Exception("Manifest had no directory set");
+                    
                     var imagesSourcePath = Path.Combine(task.Manifest.Directory.FullName, "images");
                     if (Directory.Exists(imagesSourcePath)) 
                     {
@@ -572,7 +746,7 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl, version);
+        return new BuildResult(exitCode == 0, diffUrl, version, task);
     }
 
     /// <summary>

@@ -25,10 +25,18 @@ public class MarkdownTableBuilder
         return this;
     }
 
-    public override string ToString() {
-        if (rows.Count == 1)
+    public override string ToString() => GetText();
+
+    public string GetText(bool noTable = false) {
+        if (rows.Count == 1 || noTable)
         {
-            return rows.First().Aggregate((current, col) => current + $"{col} - ")[..^3] + "\n";
+            var text = rows.Aggregate(string.Empty,
+                (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
+
+            if (!string.IsNullOrWhiteSpace(text))
+                return text[..^1];
+            
+            return string.Empty;
         }
         
         var output = "|";

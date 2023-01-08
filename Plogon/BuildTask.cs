@@ -26,4 +26,10 @@ public class BuildTask
         Build,
         Remove,
     }
+
+    public bool IsGitHub => Manifest != null && new Uri(Manifest.Plugin.Repository).Host == "github.com";
+    
+    public bool IsGitLab => Manifest != null && new Uri(Manifest.Plugin.Repository).Host == "gitlab.com";
+
+    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit ?? "?"} - {Manifest?.Plugin?.Commit ?? "?"} - {Manifest?.Directory?.FullName ?? "?"}";
 }

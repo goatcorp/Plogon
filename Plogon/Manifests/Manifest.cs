@@ -27,6 +27,31 @@ public class Manifest
     
         public List<string> Owners { get; set; }
     }
+
+    public class BuildInfo
+    {
+        public class Need
+        {
+            public string Type { get; set; }
+            
+            public string? Url { get; set; }
+            
+            public string? Dest { get; set; }
+            
+            public string? Sha512 { get; set; }
+        }
+
+        public BuildInfo()
+        {
+            this.Needs = new List<Need>();
+        }
+        
+        public List<Need> Needs { get; set; }
+
+        public string? Image { get; set; }
+    }
+    
+    public BuildInfo? Build { get; set; }
     
     public PluginInfo Plugin { get; set; }
 
