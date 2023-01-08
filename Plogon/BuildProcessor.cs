@@ -48,10 +48,19 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "6.0.300";
-    // This has to match the SDK's version identified by DOCKER_TAG
-    // See https://dotnet.microsoft.com/en-us/download/dotnet/6.0 for a mapping of SDK version <-> Runtime version
-    private const string RUNTIME_VERSION = "6.0.5";
+    private const string DOCKER_TAG = "7.0.100";
+    // This field specifies which dependency package is to be fetched depending on the .net target framework.
+    // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
+    // If a plugin breaks with a missing runtime package you might want to add the package here.
+    private readonly Dictionary<string, string[]> RUNTIME_PACKAGES = new()
+    {
+        { "net6.0", new[] 
+            { "6.0.0", "6.0.11" } 
+        },
+        { "net7.0", new[]
+            { "7.0.0", "7.0.1" } 
+        }
+    };
 
     private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
     
@@ -407,26 +416,27 @@ public class BuildProcessor
             // check if framework identifier also specifies a runtime identifier
             var runtimeId = runtime.Key.Split('/').Skip(1).FirstOrDefault();
             
-            var version = runtime.Key[..6] switch
+            // add runtime packages to dependency list
+            if (!RUNTIME_PACKAGES.TryGetValue(runtime.Key[..6], out string[]? versions))
             {
-                "net5.0" => "5.0.0",
-                "net6.0" when runtimeId is null => "6.0.0",
-                "net6.0" => RUNTIME_VERSION, // if RUNTIME_VERSION doesn't match SDKs runtime version build will fail later on
-                _ => throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}")
-            };
-
-            if (runtimeId is null)
-            {
-                // only generic reference packages are required
-                dependencies.Add(new("Microsoft.NETCore.App.Ref", version));
-                dependencies.Add(new ("Microsoft.AspNetCore.App.Ref", version));
+                throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}");
             }
-            else
+            
+            foreach (var version in versions)
             {
-                // specific runtime packages are required
-                dependencies.Add(new($"Microsoft.NETCore.App.Runtime.{runtimeId}", version));
-                dependencies.Add(new ($"Microsoft.AspNetCore.App.Runtime.{runtimeId}", version));
-                dependencies.Add(new ($"Microsoft.NETCore.App.Host.{runtimeId}", version));
+                if (runtimeId is null)
+                {
+                    // only generic reference packages are required
+                    dependencies.Add(new("Microsoft.NETCore.App.Ref", version));
+                    dependencies.Add(new ("Microsoft.AspNetCore.App.Ref", version));
+                }
+                else
+                {
+                    // specific runtime packages are required
+                    dependencies.Add(new($"Microsoft.NETCore.App.Runtime.{runtimeId}", version));
+                    dependencies.Add(new ($"Microsoft.AspNetCore.App.Runtime.{runtimeId}", version));
+                    dependencies.Add(new ($"Microsoft.NETCore.App.Host.{runtimeId}", version));
+                }
             }
         }
 
