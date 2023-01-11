@@ -429,6 +429,7 @@ public class BuildProcessor
                     // only generic reference packages are required
                     dependencies.Add(new("Microsoft.NETCore.App.Ref", version));
                     dependencies.Add(new ("Microsoft.AspNetCore.App.Ref", version));
+                    dependencies.Add(new ("Microsoft.WindowsDesktop.App.Ref", version));
                 }
                 else
                 {
