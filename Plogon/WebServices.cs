@@ -32,8 +32,8 @@ public class WebServices
     {
         using var client = new HttpClient();
         var result = await client.PostAsync(
-            $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&messageId={messageId}",
-            null);
+                         $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&messageId={messageId}",
+                         null);
         result.EnsureSuccessStatusCode();
     }
 
@@ -46,7 +46,7 @@ public class WebServices
     {
         using var client = new HttpClient();
         var result = await client.GetAsync(
-            $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}");
+                         $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}");
         result.EnsureSuccessStatusCode();
 
         return await result.Content.ReadFromJsonAsync<string[]>() ?? Array.Empty<string>();
@@ -62,9 +62,9 @@ public class WebServices
     {
         using var client = new HttpClient();
         var result = await client.PostAsync(
-            $"https://kamori.goats.dev/Plogon/RegisterVersionPrNumber?key={this.key}&prNumber={prNumber}&internalName={internalName}&version={version}",
-            null);
-        
+                         $"https://kamori.goats.dev/Plogon/RegisterVersionPrNumber?key={this.key}&prNumber={prNumber}&internalName={internalName}&version={version}",
+                         null);
+
         Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
@@ -79,11 +79,11 @@ public class WebServices
     {
         using var client = new HttpClient();
         var result = await client.GetAsync(
-            $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}");
+                         $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}");
 
         if (result.StatusCode == HttpStatusCode.NotFound)
             return null;
-        
+
         var text = await result.Content.ReadAsStringAsync();
         Log.Information("PR: {Text}", text);
         result.EnsureSuccessStatusCode();

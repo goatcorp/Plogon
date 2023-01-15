@@ -8,25 +8,25 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Docker.DotNet" Version="3.125.5" />
-      <PackageReference Include="LibGit2Sharp" Version="0.27.0-preview-0182" />
-      <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-      <PackageReference Include="Serilog" Version="2.11.0" />
-      <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1" />
-      <PackageReference Include="System.CommandLine.DragonFruit" Version="0.4.0-alpha.22114.1" />
-      <PackageReference Include="Tomlyn" Version="0.14.3" />
+        <PackageReference Include="Docker.DotNet" Version="3.125.5"/>
+        <PackageReference Include="LibGit2Sharp" Version="0.27.0-preview-0182"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.1"/>
+        <PackageReference Include="Serilog" Version="2.11.0"/>
+        <PackageReference Include="Serilog.Sinks.Console" Version="4.0.1"/>
+        <PackageReference Include="System.CommandLine.DragonFruit" Version="0.4.0-alpha.22114.1"/>
+        <PackageReference Include="Tomlyn" Version="0.14.3"/>
     </ItemGroup>
 
     <ItemGroup>
-      <Reference Include="Discord.Net.Core">
-        <HintPath>lib\Discord.Net.Core.dll</HintPath>
-      </Reference>
-      <Reference Include="Discord.Net.Rest">
-        <HintPath>lib\Discord.Net.Rest.dll</HintPath>
-      </Reference>
-      <Reference Include="Discord.Net.Webhook">
-        <HintPath>lib\Discord.Net.Webhook.dll</HintPath>
-      </Reference>
+        <Reference Include="Discord.Net.Core">
+            <HintPath>lib\Discord.Net.Core.dll</HintPath>
+        </Reference>
+        <Reference Include="Discord.Net.Rest">
+            <HintPath>lib\Discord.Net.Rest.dll</HintPath>
+        </Reference>
+        <Reference Include="Discord.Net.Webhook">
+            <HintPath>lib\Discord.Net.Webhook.dll</HintPath>
+        </Reference>
     </ItemGroup>
 
 </Project>

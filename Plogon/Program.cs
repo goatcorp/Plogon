@@ -11,8 +11,9 @@ namespace Plogon;
 
 class Program
 {
-    private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
-    
+    private static readonly string[] AlwaysBuildUsers = new[]
+        { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
+
     /// <summary>
     /// The main entry point for the application.
     /// </summary>
@@ -24,17 +25,19 @@ class Program
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
     /// <param name="buildAll">Ignore actor checks.</param>
-    static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, bool buildAll = false)
+    static async Task Main(
+        DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false,
+        bool buildAll = false)
     {
         SetupLogging();
 
         var webhook = new DiscordWebhook();
         var webservices = new WebServices();
-        
+
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
-        
+
         var actor = Environment.GetEnvironmentVariable("PR_ACTOR");
         var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
@@ -45,7 +48,7 @@ class Program
             var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
             if (string.IsNullOrEmpty(token))
                 throw new Exception("GITHUB_TOKEN not set");
-            
+
             gitHubApi = new GitHubApi(token);
             Log.Verbose("GitHub API OK, running for {Actor}", actor);
         }
@@ -69,7 +72,7 @@ class Program
             }
 
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
-                artifactFolder, prDiff);
+                                                    artifactFolder, prDiff);
             var tasks = buildProcessor.GetBuildTasks();
 
             GitHubOutputBuilder.StartGroup("List all tasks");
@@ -96,7 +99,7 @@ class Program
                 foreach (var imageInspectResponse in images)
                 {
                     imagesMd.AddRow(string.Join(",", imageInspectResponse.RepoTags),
-                        imageInspectResponse.Created.ToLongDateString());
+                                    imageInspectResponse.Created.ToLongDateString());
                 }
 
                 GitHubOutputBuilder.EndGroup();
@@ -111,8 +114,8 @@ class Program
                     if (task.Manifest?.Plugin?.Commit != null)
                     {
                         fancyCommit = task.Manifest.Plugin.Commit.Length > 7
-                            ? task.Manifest.Plugin.Commit[..7]
-                            : task.Manifest.Plugin.Commit;
+                                          ? task.Manifest.Plugin.Commit[..7]
+                                          : task.Manifest.Plugin.Commit;
 
                         if (task.IsGitHub)
                         {
@@ -168,20 +171,20 @@ class Program
                                           AlwaysBuildUsers.All(x => x != actor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
-                                task.Manifest.Plugin.Commit,
-                                task.HaveCommit ?? "nothing");
+                                            task.Manifest.Plugin.Commit,
+                                            task.HaveCommit ?? "nothing");
 
                             // Only complain if the last build was less recent, indicates configuration error
                             if (!task.HaveTimeBuilt.HasValue || task.HaveTimeBuilt.Value <= DateTime.Now)
                                 buildsMd.AddRow("👽", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                    "Not your plugin");
+                                                "Not your plugin");
 
                             continue;
                         }
 
                         Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
-                            task.Manifest.Plugin.Commit,
-                            task.HaveCommit ?? "nothing");
+                                        task.Manifest.Plugin.Commit,
+                                        task.HaveCommit ?? "nothing");
 
                         anyTried = true;
 
@@ -198,18 +201,18 @@ class Program
                         if (status.Success)
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl}", task.InternalName,
-                                task.Manifest.Plugin.Commit, status.DiffUrl);
+                                            task.Manifest.Plugin.Commit, status.DiffUrl);
 
                             if (task.HaveVersion != null &&
                                 Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
                             {
                                 buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                    $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                                $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
                             }
                             else
                             {
                                 buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                    $"v{status.Version} - [Diff]({status.DiffUrl})");
+                                                $"v{status.Version} - [Diff]({status.DiffUrl})");
 
                                 if (!string.IsNullOrEmpty(prNumber) && !commit)
                                     await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
@@ -218,10 +221,10 @@ class Program
                         else
                         {
                             Log.Error("Could not build: {Name} - {Sha}", task.InternalName,
-                                task.Manifest.Plugin.Commit);
+                                      task.Manifest.Plugin.Commit);
 
                             buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                $"Build failed ([Diff]({status.DiffUrl}))");
+                                            $"Build failed ([Diff]({status.DiffUrl}))");
                             anyFailed = true;
                         }
                     }
@@ -232,7 +235,7 @@ class Program
 
                         Log.Error(ex, "Repo consistency can't be guaranteed, aborting...");
                         buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                            "Could not commit to repo");
+                                        "Could not commit to repo");
                         aborted = true;
                         anyFailed = true;
                     }
@@ -240,7 +243,7 @@ class Program
                     {
                         Log.Error(ex, "Could not build");
                         buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                            $"Build system error: {ex.Message}");
+                                        $"Build system error: {ex.Message}");
                         anyFailed = true;
                     }
 
@@ -275,7 +278,7 @@ class Program
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
                     var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
-                        commentText + "\n\n" + buildsMd + "\n##### " + links);
+                                                            commentText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
                         await commentTask;
@@ -308,16 +311,16 @@ class Program
 
                     var ok = !anyFailed && anyTried;
                     var id = await webhook.Send(ok ? Color.Purple : Color.Red,
-                        $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
-                        hookTitle, ok ? "Accepted" : "Rejected");
+                                                $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
+                                                hookTitle, ok ? "Accepted" : "Rejected");
                     await webservices.RegisterMessageId(prNumber!, id);
                 }
 
                 if (repoName != null && commit && anyTried)
                 {
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red,
-                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
-                        "Builds committed", string.Empty);
+                                       $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
+                                       "Builds committed", string.Empty);
 
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
@@ -330,7 +333,7 @@ class Program
                         if (resultPrNum == null)
                         {
                             Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName,
-                                buildResult.Version);
+                                        buildResult.Version);
                             continue;
                         }
 
@@ -344,15 +347,15 @@ class Program
                                 {
                                     var embed = properties.Embeds.Value.First();
                                     var newEmbed = new EmbedBuilder()
-                                        .WithColor(Color.LightGrey)
-                                        .WithTitle(embed.Title)
-                                        .WithCurrentTimestamp()
-                                        .WithDescription(embed.Description);
+                                                   .WithColor(Color.LightGrey)
+                                                   .WithTitle(embed.Title)
+                                                   .WithCurrentTimestamp()
+                                                   .WithDescription(embed.Description);
 
                                     if (embed.Author.HasValue)
                                         newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name,
-                                            embed.Author.Value.IconUrl,
-                                            embed.Author.Value.Url);
+                                                                       embed.Author.Value.IconUrl,
+                                                                       embed.Author.Value.Url);
 
                                     if (embed.Footer.HasValue)
                                     {
@@ -383,8 +386,7 @@ class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Failed during init");
-        }
-        finally
+        } finally
         {
             var githubSummaryFilePath = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
             if (!string.IsNullOrEmpty(githubSummaryFilePath))
@@ -405,8 +407,8 @@ class Program
     private static void SetupLogging()
     {
         Log.Logger = new LoggerConfiguration()
-            .WriteTo.Console()
-            .MinimumLevel.Verbose()
-            .CreateLogger();
+                     .WriteTo.Console()
+                     .MinimumLevel.Verbose()
+                     .CreateLogger();
     }
 }

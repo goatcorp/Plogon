@@ -29,7 +29,7 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-    
+
     private readonly DockerClient dockerClient;
 
     private static readonly string[] DalamudInternalDll = new[]
@@ -48,22 +48,26 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
+
     private const string DOCKER_TAG = "7.0.100";
+
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
     // If a plugin breaks with a missing runtime package you might want to add the package here.
     private readonly Dictionary<string, string[]> RUNTIME_PACKAGES = new()
     {
-        { "net6.0", new[] 
-            { "6.0.0", "6.0.11" } 
+        {
+            "net6.0", new[]
+                { "6.0.0", "6.0.11" }
         },
-        { "net7.0", new[]
-            { "7.0.0", "7.0.1" } 
+        {
+            "net7.0", new[]
+                { "7.0.0", "7.0.1" }
         }
     };
 
     private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
-    
+
     /// <summary>
     /// Set up build processor
     /// </summary>
@@ -73,7 +77,8 @@ public class BuildProcessor
     /// <param name="staticFolder">Static</param>
     /// <param name="artifactFolder">Artifacts</param>
     /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR</param>
-    public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
+    public BuildProcessor(
+        DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
         DirectoryInfo staticFolder, DirectoryInfo artifactFolder, string? prDiff)
     {
         this.repoFolder = repoFolder;
@@ -84,7 +89,8 @@ public class BuildProcessor
 
         this.pluginRepository = new PluginRepository(repoFolder);
         this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
-        this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"), manifestFolder);
+        this.dalamudReleases =
+            new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"), manifestFolder);
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
@@ -99,10 +105,12 @@ public class BuildProcessor
         {
             using var client = new HttpClient();
 
-            var cacheFolder = new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".plogon_cache"));
+            var cacheFolder =
+                new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                                               ".plogon_cache"));
             if (!cacheFolder.Exists)
                 cacheFolder.Create();
-            
+
             var imageFile = new FileInfo(Path.Combine(cacheFolder.FullName, "extended-image.tar.bz2"));
             Stream? loadStream = null;
             if (imageFile.Exists)
@@ -116,32 +124,36 @@ public class BuildProcessor
                 using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
                 await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
-                
+
                 await using Stream streamToWriteTo = File.Open(imageFile.FullName, FileMode.Create);
-                
+
                 await streamToReadFrom.CopyToAsync(streamToWriteTo);
                 streamToWriteTo.Close();
-                
+
                 loadStream = File.OpenRead(imageFile.FullName);
                 Log.Information("Downloaded extended image to cache: {Path}", imageFile.FullName);
             }
 
             await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), loadStream,
-                new Progress<JSONMessage>(progress =>
-                {
-                    Log.Verbose("Docker image load ({Id}): {Status}", progress.ID, progress.Status);
-                }));
+                                                          new Progress<JSONMessage>(progress =>
+                                                          {
+                                                              Log.Verbose(
+                                                                  "Docker image load ({Id}): {Status}", progress.ID,
+                                                                  progress.Status);
+                                                          }));
         }
-        
+
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
-            {
-                FromImage = DOCKER_IMAGE,
-                Tag = DOCKER_TAG,
-            }, null,
-            new Progress<JSONMessage>(progress =>
-            {
-                Log.Verbose("Docker image pull ({Id}): {Status}", progress.ID, progress.Status);
-            }));
+                                                        {
+                                                            FromImage = DOCKER_IMAGE,
+                                                            Tag = DOCKER_TAG,
+                                                        }, null,
+                                                        new Progress<JSONMessage>(progress =>
+                                                        {
+                                                            Log.Verbose(
+                                                                "Docker image pull ({Id}): {Status}", progress.ID,
+                                                                progress.Status);
+                                                        }));
 
         var images = await this.dockerClient.Images.ListImagesAsync(new ImagesListParameters
         {
@@ -215,23 +227,24 @@ public class BuildProcessor
         return tasks;
     }
 
-    async Task GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
+    async Task GetDependency(
+        string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
     {
         var pkgName = name.ToLower();
         var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
         var depPath = Path.Combine(pkgFolder.FullName, fileName);
-        
+
         if (File.Exists(depPath))
             return;
-        
+
         Log.Information("   => Getting {DepName}(v{Version})", name, dependency.Resolved);
         var url =
             $"https://api.nuget.org/v3-flatcontainer/{pkgName}/{dependency.Resolved}/{fileName}";
 
         var data = await client.GetByteArrayAsync(url);
-            
+
         // TODO: verify content hash
-            
+
         await File.WriteAllBytesAsync(depPath, data);
     }
 
@@ -240,20 +253,23 @@ public class BuildProcessor
         foreach (var runtime in lockFileData.Runtimes)
         {
             Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
-            
+
             await Task.WhenAll(runtime.Value
-                .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
-                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder,client)).ToList());
+                                      .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
+                                      .Select(dependency =>
+                                                  GetDependency(dependency.Key, dependency.Value, pkgFolder, client))
+                                      .ToList());
         }
     }
 
     private async Task RestoreAllPackages(BuildTask task, DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder)
     {
         var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
-        
+
         if (lockFiles.Length == 0)
-            throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
-        
+            throw new Exception(
+                "No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+
         using var client = new HttpClient();
 
         HashSet<Tuple<string, string>> runtimeDependencies = new();
@@ -267,19 +283,22 @@ public class BuildProcessor
                 throw new Exception($"Unknown lockfile version: {lockFileData.Version}");
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
-            
+
             await RestorePackages(pkgFolder, lockFileData, client);
         }
-        
+
         // fetch runtime packages
-        await Task.WhenAll(runtimeDependencies.Select(dependency => GetDependency(dependency.Item1, new() { Resolved = dependency.Item2 }, pkgFolder, client)));
+        await Task.WhenAll(runtimeDependencies.Select(dependency =>
+                                                          GetDependency(
+                                                              dependency.Item1, new() { Resolved = dependency.Item2 },
+                                                              pkgFolder, client)));
     }
 
     async Task GetNeeds(BuildTask task, DirectoryInfo needs)
     {
         if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
             return;
-        
+
         using var client = new HttpClient();
 
         foreach (var need in task.Manifest!.Build!.Needs)
@@ -290,15 +309,15 @@ public class BuildProcessor
 
             if (need.Dest!.Contains(".."))
                 throw new Exception();
-            
+
             var fileToWriteTo = Path.Combine(needs.FullName, need.Dest!);
             {
                 await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
-            
+
                 await streamToReadFrom.CopyToAsync(streamToWriteTo);
                 streamToWriteTo.Close();
             }
-            
+
             Log.Information("Downloaded need {Url} to {Dest}", need.Url, need.Dest);
         }
     }
@@ -308,7 +327,7 @@ public class BuildProcessor
         [JsonPropertyName("key")]
         public string? Key { get; set; }
     };
-    
+
     private async Task<string> GetDiffUrl(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
         var internalName = task.InternalName;
@@ -316,17 +335,19 @@ public class BuildProcessor
         var wantCommit = task.Manifest!.Plugin.Commit;
         var host = new Uri(task.Manifest!.Plugin.Repository);
         const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-        
+
         if (string.IsNullOrEmpty(haveCommit))
         {
             haveCommit = emptyTree; // "empty tree"
-            
+
             var removeTask = tasks.FirstOrDefault(x =>
-                x.InternalName == internalName && x.Type == BuildTask.TaskType.Remove);
+                                                      x.InternalName == internalName &&
+                                                      x.Type == BuildTask.TaskType.Remove);
             if (removeTask != null)
             {
                 haveCommit = removeTask.HaveCommit!;
-                Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
+                Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit,
+                                removeTask.Channel);
             }
         }
 
@@ -342,9 +363,9 @@ public class BuildProcessor
                 // Check if relevant commit is still in the repo
                 if (!await CheckCommitExists(workDir, haveCommit))
                     haveCommit = emptyTree;
-                    
+
                 var diffPsi = new ProcessStartInfo("git",
-                    $"diff --submodule=diff {haveCommit}..{wantCommit}")
+                                                   $"diff --submodule=diff {haveCommit}..{wantCommit}")
                 {
                     RedirectStandardOutput = true,
                     WorkingDirectory = workDir.FullName,
@@ -359,10 +380,11 @@ public class BuildProcessor
                 await process.WaitForExitAsync();
                 if (process.ExitCode != 0)
                     throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-        
+
                 Log.Verbose("{Args}: {Length}", diffPsi.Arguments, output.Length);
 
-                var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(output));
+                var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents",
+                                                 new StringContent(output));
                 res.EnsureSuccessStatusCode();
 
                 var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
@@ -370,11 +392,11 @@ public class BuildProcessor
                 return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
         }
     }
-    
+
     private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
     {
         var psi = new ProcessStartInfo("git",
-            $"cat-file -e {commit}^{{commit}}")
+                                       $"cat-file -e {commit}^{{commit}}")
         {
             WorkingDirectory = workDir.FullName,
         };
@@ -391,7 +413,7 @@ public class BuildProcessor
     private async Task<bool> CheckIfTrueCommit(DirectoryInfo workDir, string commit)
     {
         var psi = new ProcessStartInfo("git",
-            $"rev-parse --symbolic-full-name {commit}")
+                                       $"rev-parse --symbolic-full-name {commit}")
         {
             RedirectStandardOutput = true,
             WorkingDirectory = workDir.FullName,
@@ -406,7 +428,7 @@ public class BuildProcessor
 
         return string.IsNullOrEmpty(output);
     }
-    
+
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
     {
         HashSet<Tuple<string, string>> dependencies = new();
@@ -415,28 +437,28 @@ public class BuildProcessor
         {
             // check if framework identifier also specifies a runtime identifier
             var runtimeId = runtime.Key.Split('/').Skip(1).FirstOrDefault();
-            
+
             // add runtime packages to dependency list
             if (!RUNTIME_PACKAGES.TryGetValue(runtime.Key[..6], out string[]? versions))
             {
                 throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}");
             }
-            
+
             foreach (var version in versions)
             {
                 if (runtimeId is null)
                 {
                     // only generic reference packages are required
                     dependencies.Add(new("Microsoft.NETCore.App.Ref", version));
-                    dependencies.Add(new ("Microsoft.AspNetCore.App.Ref", version));
-                    dependencies.Add(new ("Microsoft.WindowsDesktop.App.Ref", version));
+                    dependencies.Add(new("Microsoft.AspNetCore.App.Ref", version));
+                    dependencies.Add(new("Microsoft.WindowsDesktop.App.Ref", version));
                 }
                 else
                 {
                     // specific runtime packages are required
                     dependencies.Add(new($"Microsoft.NETCore.App.Runtime.{runtimeId}", version));
-                    dependencies.Add(new ($"Microsoft.AspNetCore.App.Runtime.{runtimeId}", version));
-                    dependencies.Add(new ($"Microsoft.NETCore.App.Host.{runtimeId}", version));
+                    dependencies.Add(new($"Microsoft.AspNetCore.App.Runtime.{runtimeId}", version));
+                    dependencies.Add(new($"Microsoft.NETCore.App.Host.{runtimeId}", version));
                 }
             }
         }
@@ -463,12 +485,12 @@ public class BuildProcessor
             this.Version = version;
             this.Task = task;
         }
-        
+
         /// <summary>
         /// If it worked
         /// </summary>
         public bool Success { get; private set; }
-        
+
         /// <summary>
         /// Where the diff is
         /// </summary>
@@ -478,7 +500,7 @@ public class BuildProcessor
         /// The version of the plugin artifact
         /// </summary>
         public string? Version { get; private set; }
-        
+
         /// <summary>
         /// The task that was processed
         /// </summary>
@@ -490,7 +512,7 @@ public class BuildProcessor
         [JsonProperty]
         public string? AssemblyVersion { get; set; }
     }
-    
+
     /// <summary>
     /// Check out and build a plugin from a task
     /// </summary>
@@ -501,15 +523,16 @@ public class BuildProcessor
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, ISet<BuildTask> otherTasks)
+    public async Task<BuildResult> ProcessTask(
+        BuildTask task, bool commit, string? changelog, ISet<BuildTask> otherTasks)
     {
         if (task.Type == BuildTask.TaskType.Remove)
         {
             if (!commit)
                 throw new Exception("Can't remove plugins if not committing");
-            
+
             this.pluginRepository.RemovePlugin(task.Channel, task.InternalName);
-            
+
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
@@ -518,7 +541,7 @@ public class BuildProcessor
 
         if (task.Manifest == null)
             throw new Exception("Manifest was null");
-        
+
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
@@ -529,7 +552,7 @@ public class BuildProcessor
 
         if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
             throw new Exception("No repository specified");
-        
+
         if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
             !task.Manifest.Plugin.Repository.EndsWith(".git"))
             throw new Exception("Only HTTPS repository URLs ending in .git are supported");
@@ -538,7 +561,7 @@ public class BuildProcessor
             throw new Exception("No commit specified");
 
         task.Manifest.Plugin.ProjectPath ??= string.Empty;
-        
+
         if (task.Manifest.Plugin.ProjectPath.Contains(".."))
             throw new Exception("Not allowed");
 
@@ -553,8 +576,7 @@ public class BuildProcessor
 
         var repo = new Repository(work.FullName);
         Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
-        {
-        }, null);
+                           { }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
 
         foreach (var submodule in repo.Submodules)
@@ -564,7 +586,7 @@ public class BuildProcessor
                 Init = true,
             });
         }
-        
+
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
@@ -575,48 +597,50 @@ public class BuildProcessor
         await GetNeeds(task, needs);
         await RestoreAllPackages(task, work, packages);
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
-        
-        var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
-            new CreateContainerParameters
-            {
-                Image = needsExtendedImage ? EXTENDED_IMAGE_HASH : $"{DOCKER_IMAGE}:{DOCKER_TAG}",
-                
-                NetworkDisabled = true,
 
-                AttachStderr = true,
-                AttachStdout = true,
-                HostConfig = new HostConfig
-                {
-                    Privileged = false,
-                    IpcMode = "none",
-                    AutoRemove = false,
-                    Binds = new List<string>
-                    {
-                        $"{work.FullName}:/work/repo",
-                        $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
-                        $"{staticFolder.FullName}:/static:ro",
-                        $"{output.FullName}:/output",
-                        $"{packages.FullName}:/packages:ro",
-                        $"{needs.FullName}:/needs:ro"
-                    }
-                },
-                Env = new List<string>
-                {
-                    $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
-                    $"PLOGON_PLUGIN_NAME={task.InternalName}",
-                    $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
-                    $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
-                    "DALAMUD_LIB_PATH=/work/dalamud/"
-                },
-                Entrypoint = new List<string>
-                {
-                    "/static/entrypoint.sh"
-                }
-            });
+        var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
+                                          new CreateContainerParameters
+                                          {
+                                              Image = needsExtendedImage
+                                                          ? EXTENDED_IMAGE_HASH
+                                                          : $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+
+                                              NetworkDisabled = true,
+
+                                              AttachStderr = true,
+                                              AttachStdout = true,
+                                              HostConfig = new HostConfig
+                                              {
+                                                  Privileged = false,
+                                                  IpcMode = "none",
+                                                  AutoRemove = false,
+                                                  Binds = new List<string>
+                                                  {
+                                                      $"{work.FullName}:/work/repo",
+                                                      $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
+                                                      $"{staticFolder.FullName}:/static:ro",
+                                                      $"{output.FullName}:/output",
+                                                      $"{packages.FullName}:/packages:ro",
+                                                      $"{needs.FullName}:/needs:ro"
+                                                  }
+                                              },
+                                              Env = new List<string>
+                                              {
+                                                  $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
+                                                  $"PLOGON_PLUGIN_NAME={task.InternalName}",
+                                                  $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
+                                                  $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
+                                                  "DALAMUD_LIB_PATH=/work/dalamud/"
+                                              },
+                                              Entrypoint = new List<string>
+                                              {
+                                                  "/static/entrypoint.sh"
+                                              }
+                                          });
 
         var startResponse =
             await this.dockerClient.Containers.StartContainerAsync(containerCreateResponse.ID,
-                new ContainerStartParameters());
+                                                                   new ContainerStartParameters());
 
         if (!startResponse)
         {
@@ -624,12 +648,12 @@ public class BuildProcessor
         }
 
         var logResponse = await this.dockerClient.Containers.GetContainerLogsAsync(containerCreateResponse.ID, false,
-            new ContainerLogsParameters
-            {
-                Follow = true,
-                ShowStderr = true,
-                ShowStdout = true,
-            });
+                              new ContainerLogsParameters
+                              {
+                                  Follow = true,
+                                  ShowStderr = true,
+                                  ShowStdout = true,
+                              });
 
         var hasExited = false;
         while (!hasExited)
@@ -657,17 +681,18 @@ public class BuildProcessor
         Log.Information("Container for build exited, exit code: {Code}", exitCode);
 
         await this.dockerClient.Containers.RemoveContainerAsync(containerCreateResponse.ID,
-            new ContainerRemoveParameters
-            {
-                Force = true,
-            });
+                                                                new ContainerRemoveParameters
+                                                                {
+                                                                    Force = true,
+                                                                });
 
         var outputFiles = output.GetFiles("*.dll", SearchOption.AllDirectories);
         foreach (var outputFile in outputFiles)
         {
             if (DalamudInternalDll.Any(x => x == outputFile.Name))
             {
-                throw new Exception($"Build is emitting Dalamud-internal DLL({outputFile.Name}), this will cause issues.");
+                throw new Exception(
+                    $"Build is emitting Dalamud-internal DLL({outputFile.Name}), this will cause issues.");
             }
         }
 
@@ -702,7 +727,8 @@ public class BuildProcessor
                 if (manifest == null)
                     throw new Exception("Generated manifest was null");
 
-                version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
+                version = manifest.AssemblyVersion ??
+                          throw new Exception("AssemblyVersion in generated manifest was null");
             }
             catch (Exception ex)
             {
@@ -715,7 +741,8 @@ public class BuildProcessor
             {
                 try
                 {
-                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!, changelog);
+                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit,
+                                                           version!, changelog);
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
                     foreach (var file in dpOutput.GetFiles())
@@ -725,9 +752,9 @@ public class BuildProcessor
 
                     if (task.Manifest.Directory == null)
                         throw new Exception("Manifest had no directory set");
-                    
+
                     var imagesSourcePath = Path.Combine(task.Manifest.Directory.FullName, "images");
-                    if (Directory.Exists(imagesSourcePath)) 
+                    if (Directory.Exists(imagesSourcePath))
                     {
                         var imagesDestinationPath = Path.Combine(repoOutputDir.FullName, "images");
                         if (Directory.Exists(imagesDestinationPath))
@@ -738,11 +765,11 @@ public class BuildProcessor
                     // DELETE THIS!!
                     var manifestFile = new FileInfo(Path.Combine(repoOutputDir.FullName, $"{task.InternalName}.json"));
                     var manifestText = await File.ReadAllTextAsync(manifestFile.FullName);
-                    
+
                     var manifestObj = JObject.Parse(manifestText);
                     manifestObj["_isDip17Plugin"] = true;
                     manifestObj["_Dip17Channel"] = task.Channel;
-                    
+
                     await File.WriteAllTextAsync(manifestFile.FullName, manifestObj.ToString());
                 }
                 catch (Exception ex)
@@ -756,7 +783,7 @@ public class BuildProcessor
         {
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
-        
+
         return new BuildResult(exitCode == 0, diffUrl, version, task);
     }
 
@@ -770,8 +797,6 @@ public class BuildProcessor
         /// </summary>
         /// <param name="inner">Actual error</param>
         public PluginCommitException(Exception inner)
-            : base("Could not commit plugin.", inner)
-        {
-        }
+            : base("Could not commit plugin.", inner) { }
     }
 }
