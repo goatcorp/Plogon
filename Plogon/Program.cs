@@ -346,36 +346,32 @@ class Program
 
                             foreach (var id in msgIds)
                             {
-                                await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
-                                {
-                                    var embed = properties.Embeds.Value.First();
-                                    var newEmbed = new EmbedBuilder()
-                                        .WithColor(Color.LightGrey)
-                                        .WithTitle(embed.Title)
-                                        .WithCurrentTimestamp()
-                                        .WithDescription(embed.Description);
+                                if (webhook is not null)
+                                    await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties => {
+                                        var embed = properties.Embeds.Value.First();
+                                        var newEmbed = new EmbedBuilder()
+                                            .WithColor(Color.LightGrey)
+                                            .WithTitle(embed.Title)
+                                            .WithCurrentTimestamp()
+                                            .WithDescription(embed.Description);
 
-                                    if (embed.Author.HasValue)
-                                        newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name,
-                                            embed.Author.Value.IconUrl,
-                                            embed.Author.Value.Url);
+                                        if (embed.Author.HasValue)
+                                            newEmbed = newEmbed.WithAuthor(embed.Author.Value.Name,
+                                                embed.Author.Value.IconUrl,
+                                                embed.Author.Value.Url);
 
-                                    if (embed.Footer.HasValue)
-                                    {
-                                        if (embed.Footer.Value.Text.Contains("Comment"))
-                                        {
-                                            newEmbed = newEmbed.WithFooter(
-                                                embed.Footer.Value.Text.Replace("Comment", "Committed"),
-                                                embed.Footer.Value.IconUrl);
+                                        if (embed.Footer.HasValue) {
+                                            if (embed.Footer.Value.Text.Contains("Comment")) {
+                                                newEmbed = newEmbed.WithFooter(
+                                                    embed.Footer.Value.Text.Replace("Comment", "Committed"),
+                                                    embed.Footer.Value.IconUrl);
+                                            } else {
+                                                newEmbed = newEmbed.WithFooter("Committed");
+                                            }
                                         }
-                                        else
-                                        {
-                                            newEmbed = newEmbed.WithFooter("Committed");
-                                        }
-                                    }
 
-                                    properties.Embeds = new[] { newEmbed.Build() };
-                                });
+                                        properties.Embeds = new[] { newEmbed.Build() };
+                                    });
                             }
                         }
                         catch (Exception ex)
