@@ -29,7 +29,8 @@ class Program
     {
         SetupLogging();
 
-        var webhook = new DiscordWebhook();
+        var webhookUrl = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK");
+        var webhook = webhookUrl is not null ? new DiscordWebhook(webhookUrl) : null;
         var webservices = new WebServices();
         
         var githubSummary = "## Build Summary\n";
@@ -307,17 +308,22 @@ class Program
                             $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    var id = await webhook.Send(ok ? Color.Purple : Color.Red,
-                        $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
-                        hookTitle, ok ? "Accepted" : "Rejected");
-                    await webservices.RegisterMessageId(prNumber!, id);
+
+                    if (webhook is not null) {
+                        var id = await webhook.Send(ok ? Color.Purple : Color.Red,
+                            $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
+                            hookTitle, ok ? "Accepted" : "Rejected");
+                        await webservices.RegisterMessageId(prNumber!, id);
+                    }
                 }
 
                 if (repoName != null && commit && anyTried)
                 {
-                    await webhook.Send(!anyFailed ? Color.Green : Color.Red,
-                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
-                        "Builds committed", string.Empty);
+                    if (webhook is not null) {
+                        await webhook.Send(!anyFailed ? Color.Green : Color.Red,
+                            $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
+                            "Builds committed", string.Empty);
+                    }
 
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))

@@ -18,9 +18,9 @@ public class DiscordWebhook
     /// <summary>
     /// Init with webhook from env var
     /// </summary>
-    public DiscordWebhook()
+    public DiscordWebhook(string webhook)
     {
-        this.Client = new DiscordWebhookClient(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
+        this.Client = new DiscordWebhookClient(webhook);
     }
 
     private static DateTime GetPacificStandardTime()
