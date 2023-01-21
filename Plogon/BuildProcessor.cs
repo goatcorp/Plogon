@@ -62,7 +62,7 @@ public class BuildProcessor
         }
     };
 
-    private const string EXTENDED_IMAGE_HASH = "38f9afcc7475646604cba1fe5a63333f7443097f390604295c982a00740f35c6";
+    private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
     
     /// <summary>
     /// Set up build processor
