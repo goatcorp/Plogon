@@ -210,9 +210,24 @@ class Program
                             {
                                 buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                     $"v{status.Version} - [Diff]({status.DiffUrl})");
+                            }
+                            
+                            if (!string.IsNullOrEmpty(prNumber) && !commit)
+                                await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
 
-                                if (!string.IsNullOrEmpty(prNumber) && !commit)
-                                    await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
+                            if (commit)
+                            {
+                                var resultPrNum =
+                                    await webservices.GetPrNumber(task.InternalName, status.Version!);
+
+                                await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
+                                {
+                                    InternalName = task.InternalName,
+                                    Version = status.Version!,
+                                    Dip17Track = task.Channel,
+                                    PrNumber = int.TryParse(resultPrNum, out var intPrNum) ? intPrNum : null,
+                                    Changelog = changelog,
+                                });
                             }
                         }
                         else

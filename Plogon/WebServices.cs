@@ -90,4 +90,33 @@ public class WebServices
 
         return text;
     }
+    
+    public class StagedPluginInfo
+    {
+        public string InternalName { get; set; }
+        public string Version { get; set; }
+        public string Dip17Track { get; set; }
+        public int? PrNumber { get; set; }
+        public string? Changelog { get; set; }
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="internalName"></param>
+    /// <param name="version"></param>
+    /// <param name="track"></param>
+    /// <param name="prNumber"></param>
+    /// <param name="changelog"></param>
+    public async Task StagePluginBuild(StagedPluginInfo info)
+    {
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Add("X-XL-Key", this.key);
+        var result = await client.PostAsync(
+            $"https://kamori.goats.dev/Plogon/StagePluginBuild",
+            JsonContent.Create(info));
+        
+        Log.Information(await result.Content.ReadAsStringAsync());
+        result.EnsureSuccessStatusCode();
+    }
 }
