@@ -217,15 +217,26 @@ class Program
 
                             if (commit)
                             {
-                                var resultPrNum =
-                                    await webservices.GetPrNumber(task.InternalName, status.Version!);
+                                int? prInt = null;
+                                if (int.TryParse(await webservices.GetPrNumber(task.InternalName, status.Version!),
+                                        out var commitPrNum))
+                                {
+                                    // Let's try again here in case we didn't get it the first time around
+                                    if (string.IsNullOrEmpty(changelog) && repoName != null &&
+                                        gitHubApi != null)
+                                    {
+                                        changelog = await gitHubApi.GetIssueBody(repoName, commitPrNum);
+                                    }
 
+                                    prInt = commitPrNum;
+                                }
+                                
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
                                 {
                                     InternalName = task.InternalName,
                                     Version = status.Version!,
                                     Dip17Track = task.Channel,
-                                    PrNumber = int.TryParse(resultPrNum, out var intPrNum) ? intPrNum : null,
+                                    PrNumber = prInt,
                                     Changelog = changelog,
                                 });
                             }

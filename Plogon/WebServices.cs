@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Serilog;
+#pragma warning disable CS1591
 
 namespace Plogon;
 
@@ -93,21 +94,13 @@ public class WebServices
     
     public class StagedPluginInfo
     {
-        public string InternalName { get; set; }
-        public string Version { get; set; }
-        public string Dip17Track { get; set; }
+        public string InternalName { get; set; } = null!;
+        public string Version { get; set; } = null!;
+        public string Dip17Track { get; set; } = null!;
         public int? PrNumber { get; set; }
         public string? Changelog { get; set; }
     }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="internalName"></param>
-    /// <param name="version"></param>
-    /// <param name="track"></param>
-    /// <param name="prNumber"></param>
-    /// <param name="changelog"></param>
+    
     public async Task StagePluginBuild(StagedPluginInfo info)
     {
         using var client = new HttpClient();
