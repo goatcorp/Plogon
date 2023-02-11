@@ -213,12 +213,12 @@ class Program
                             }
                             
                             if (!string.IsNullOrEmpty(prNumber) && !commit)
-                                await webservices.RegisterPrNumber(task.InternalName, status.Version!, prNumber);
+                                await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit, prNumber);
 
                             if (commit)
                             {
                                 int? prInt = null;
-                                if (int.TryParse(await webservices.GetPrNumber(task.InternalName, status.Version!),
+                                if (int.TryParse(await webservices.GetPrNumber(task.InternalName, task.Manifest.Plugin.Commit),
                                         out var commitPrNum))
                                 {
                                     // Let's try again here in case we didn't get it the first time around
@@ -352,7 +352,7 @@ class Program
                             continue;
 
                         var resultPrNum =
-                            await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Version!);
+                            await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Task.Manifest!.Plugin.Commit);
                         if (resultPrNum == null)
                         {
                             Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName,
