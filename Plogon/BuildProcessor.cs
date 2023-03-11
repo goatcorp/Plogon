@@ -656,7 +656,7 @@ public class BuildProcessor
 
         Log.Information("Container for build exited, exit code: {Code}", exitCode);
         
-        if (exitCode == 0 && File.Exists(Path.Combine(task.Manifest.Directory.FullName, "images", "icon.png")) == false)
+        if (exitCode == 0 && !commit && File.Exists(Path.Combine(task.Manifest.Directory.FullName, "images", "icon.png")) == false)
         {
             throw new Exception("icon.png is missing from images/.");
         }
