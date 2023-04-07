@@ -489,6 +489,9 @@ public class BuildProcessor
     {
         [JsonProperty]
         public string? AssemblyVersion { get; set; }
+        
+        [JsonProperty]
+        public string? InternalName { get; set; }
     }
     
     /// <summary>
@@ -706,6 +709,9 @@ public class BuildProcessor
 
                 if (manifest == null)
                     throw new Exception("Generated manifest was null");
+
+                if (manifest.InternalName != task.InternalName)
+                    throw new Exception("Internal name in generated manifest JSON differs from DIP17 folder name.");
 
                 version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
             }
