@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Serilog;
+using Octokit;
 
 namespace Plogon;
 
@@ -13,28 +10,22 @@ namespace Plogon;
 /// </summary>
 public class GitHubApi
 {
-    private readonly HttpClient client;
+    private readonly string repoOwner;
+    private readonly string repoName;
+    private readonly GitHubClient ghClient;
 
     /// <summary>
     /// Make new GitHub API
     /// </summary>
     /// <param name="token">Github token</param>
-    public GitHubApi(string token)
+    public GitHubApi(string repoOwner, string repoName, string token)
     {
-        this.client = new HttpClient()
+        this.repoOwner = repoOwner;
+        this.repoName = repoName;
+        this.ghClient = new GitHubClient(new ProductHeaderValue("PlogonBuild", "1.0.0"))
         {
-            DefaultRequestHeaders =
-            {
-                Accept = { new MediaTypeWithQualityHeaderValue("application/vnd.github+json") },
-                UserAgent = { new ProductInfoHeaderValue("PlogonBuild", "1.0.0") },
-                Authorization = new AuthenticationHeaderValue("token", token),
-            }
+            Credentials = new Credentials(token)
         };
-    }
-
-    private class CommentCreateBody
-    {
-        public string? Body { get; set; }
     }
 
     /// <summary>
@@ -43,21 +34,33 @@ public class GitHubApi
     /// <param name="repo">The repo to use</param>
     /// <param name="issueNumber">The issue number</param>
     /// <param name="body">The body</param>
-    public async Task AddComment(string repo, int issueNumber, string body)
+    public async Task AddComment(int issueNumber, string body)
     {
-        var jsonBody = new CommentCreateBody()
-        {
-            Body = body,
-        };
-        
-        var request = new HttpRequestMessage(HttpMethod.Post,
-            $"https://api.github.com/repos/{repo}/issues/{issueNumber}/comments");
-        request.Content = JsonContent.Create(jsonBody);
+        await this.ghClient.Issue.Comment.Create(repoOwner, repoName, issueNumber, body);
+    }
 
-        var response = await this.client.SendAsync(request);
-        //Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
+    public async Task CrossOutAllOfMyComments(int issueNumber)
+    {
+        var me = await this.ghClient.User.Current();
+        if (me == null)
+            throw new Exception("Couldn't get auth'd user");
+
+        var comments = await this.ghClient.Issue.Comment.GetAllForIssue(repoOwner, repoName, issueNumber);
+        if (comments == null)
+            throw new Exception("Couldn't get issue comments");
         
-        response.EnsureSuccessStatusCode();
+        foreach (var comment in comments)
+        {
+            if (comment.User.Id != me.Id)
+                continue;
+            
+            // Only do this once
+            if (comment.Body.StartsWith("<details>"))
+                continue;
+
+            var newComment = $"<details>\n<summary>Outdated attempt</summary>\n\n{comment.Body}\n</details>";
+            await this.ghClient.Issue.Comment.Update(repoOwner, repoName, comment.Id, newComment);
+        }
     }
 
     /// <summary>
@@ -68,12 +71,8 @@ public class GitHubApi
     /// <returns></returns>
     public async Task<string> GetPullRequestDiff(string repo, string prNum)
     {
-        return await this.client.GetStringAsync($"https://github.com/{repo}/pull/{prNum}.diff");
-    }
-
-    private class IssueResponse
-    {
-        [JsonPropertyName("body")] public string? Body { get; set; }
+        using var client = new HttpClient();
+        return await client.GetStringAsync($"https://github.com/{repo}/pull/{prNum}.diff");
     }
 
     /// <summary>
@@ -83,16 +82,12 @@ public class GitHubApi
     /// <param name="issueNumber">Issue number</param>
     /// <returns>PR body</returns>
     /// <exception cref="Exception">Thrown when the body couldn't be read</exception>
-    public async Task<string> GetIssueBody(string repo, int issueNumber)
+    public async Task<string> GetIssueBody(int issueNumber)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.github.com/repos/{repo}/issues/{issueNumber}");
-        var response = await this.client.SendAsync(request);
-        Log.Verbose("{Repo}, {PrNum}: {Resp}", repo, issueNumber, await response.Content.ReadAsStringAsync());
-        
-        response.EnsureSuccessStatusCode();
+        var pr = await this.ghClient.PullRequest.Get(repoOwner, repoName, issueNumber);
+        if (pr == null)
+            throw new Exception("Could not get PR");
 
-        var body = await response.Content.ReadFromJsonAsync<IssueResponse>();
-        return body?.Body ?? string.Empty;
+        return pr.Body;
     }
 }

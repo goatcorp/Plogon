@@ -36,7 +36,9 @@ class Program
         GitHubOutputBuilder.SetActive(ci);
         
         var actor = Environment.GetEnvironmentVariable("PR_ACTOR");
-        var repoName = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY");
+        var repoParts = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")?.Split("/");
+        var repoOwner = repoParts?[0];
+        var repoName = repoParts?[1];
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
 
         GitHubApi? gitHubApi = null;
@@ -45,8 +47,14 @@ class Program
             var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
             if (string.IsNullOrEmpty(token))
                 throw new Exception("GITHUB_TOKEN not set");
+
+            if (string.IsNullOrEmpty(repoOwner))
+                throw new Exception("repoOwner null or empty");
             
-            gitHubApi = new GitHubApi(token);
+            if (string.IsNullOrEmpty(repoName))
+                throw new Exception("repoName null or empty");
+            
+            gitHubApi = new GitHubApi(repoOwner, repoName, token);
             Log.Verbose("GitHub API OK, running for {Actor}", actor);
         }
 
@@ -189,7 +197,7 @@ class Program
                         if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null &&
                             gitHubApi != null && commit)
                         {
-                            changelog = await gitHubApi.GetIssueBody(repoName, int.Parse(prNumber));
+                            changelog = await gitHubApi.GetIssueBody(int.Parse(prNumber));
                         }
 
                         var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
@@ -225,7 +233,7 @@ class Program
                                     if (string.IsNullOrEmpty(changelog) && repoName != null &&
                                         gitHubApi != null)
                                     {
-                                        changelog = await gitHubApi.GetIssueBody(repoName, commitPrNum);
+                                        changelog = await gitHubApi.GetIssueBody(commitPrNum);
                                     }
 
                                     prInt = commitPrNum;
@@ -284,6 +292,7 @@ class Program
                 {
                     text = text.Replace("✔️", "<:yeah:980227103725342810>");
                     text = text.Replace("❌", "<:whaaa:980227735421079622>");
+                    text = text.Replace("😰", "<:dogeatbee:539585692439674881>");
                     return text;
                 }
 
@@ -300,7 +309,12 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var commentTask = gitHubApi?.AddComment(repoName, int.Parse(prNumber),
+                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(int.Parse(prNumber));
+                    
+                    if (crossOutTask != null)
+                        await crossOutTask;
+                    
+                    var commentTask = gitHubApi?.AddComment(int.Parse(prNumber),
                         commentText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
@@ -313,7 +327,7 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(repoName, int.Parse(prNumber));
+                        var prDesc = await gitHubApi!.GetIssueBody(int.Parse(prNumber));
                         if (!string.IsNullOrEmpty(prDesc))
                             buildInfo += $"```\n{prDesc}\n```\n";
                     }
