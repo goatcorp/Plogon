@@ -60,8 +60,9 @@ class Program
         }
 
         var aborted = false;
-        var anyFailed = false;
-        var anyTried = false;
+        var numFailed = 0;
+        var numTried = 0;
+        var numNoIcon = 0;
 
         var statuses = new List<BuildProcessor.BuildResult>();
 
@@ -200,7 +201,7 @@ class Program
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
-                        anyTried = true;
+                        numTried++;
 
                         var changelog = task.Manifest.Plugin.Changelog;
                         if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null &&
@@ -268,7 +269,7 @@ class Program
 
                             buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                 $"Build failed ([Diff]({status.DiffUrl}))");
-                            anyFailed = true;
+                            numFailed++;
                         }
                     }
                     catch (BuildProcessor.PluginCommitException ex)
@@ -280,14 +281,15 @@ class Program
                         buildsMd.AddRow("⁉️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                             "Could not commit to repo");
                         aborted = true;
-                        anyFailed = true;
+                        numFailed++;
                     }
                     catch (BuildProcessor.MissingIconException)
                     {
                         Log.Error("Missing icon!");
                         buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                             "Missing icon in images/ build output!");
-                        anyFailed = true;
+                        numFailed++;
+                        numNoIcon++;
 
                         prLabels |= GitHubApi.PrLabel.NeedIcon;
                     }
@@ -296,7 +298,7 @@ class Program
                         Log.Error(ex, "Could not build");
                         buildsMd.AddRow("😰", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                             $"Build system error: {ex.Message}");
-                        anyFailed = true;
+                        numFailed++;
                     }
 
                     GitHubOutputBuilder.EndGroup();
@@ -317,8 +319,11 @@ class Program
                     return text;
                 }
                 
-                if (aborted || anyFailed)
+                if (aborted || (numFailed > 0 && numFailed != numNoIcon))
                     prLabels |= GitHubApi.PrLabel.BuildFailed;
+
+                var anyTried = numTried > 0;
+                var anyFailed = numFailed > 0;
 
                 if (repoName != null && prNumber != null)
                 {
@@ -461,7 +466,9 @@ class Program
                 await File.WriteAllTextAsync(githubSummaryFilePath, githubSummary);
             }
 
-            if (!anyTried && prNumber != null)
+            var anyFailed = numFailed > 0;
+
+            if (numTried == 0 && prNumber != null)
             {
                 Log.Error("Was a PR, but did not build any plugins - failing.");
                 anyFailed = true;
