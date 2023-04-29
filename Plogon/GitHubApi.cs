@@ -96,7 +96,7 @@ public class GitHubApi
     private const string PR_LABEL_NEW_PLUGIN = "new plugin";
     private const string PR_LABEL_NEED_ICON = "need icon";
     private const string PR_LABEL_BUILD_FAILED = "build failed";
-    private const string PR_LABEL_SAME_VERSION = "same version";
+    private const string PR_LABEL_VERSION_CONFLICT = "version conflict";
     private const string PR_LABEL_MOVE_CHANNEL = "move channel";
 
     [Flags]
@@ -130,9 +130,9 @@ public class GitHubApi
             managedLabels.Remove(PR_LABEL_BUILD_FAILED);
         
         if (label.HasFlag(PrLabel.VersionConflict))
-            managedLabels.Add(PR_LABEL_SAME_VERSION);
+            managedLabels.Add(PR_LABEL_VERSION_CONFLICT);
         else
-            managedLabels.Remove(PR_LABEL_SAME_VERSION);
+            managedLabels.Remove(PR_LABEL_VERSION_CONFLICT);
         
         if (label.HasFlag(PrLabel.MoveChannel))
             managedLabels.Add(PR_LABEL_MOVE_CHANNEL);
