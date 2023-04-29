@@ -69,7 +69,7 @@ class Program
             string? prDiff = null;
             if (gitHubApi is not null && repoName is not null && prNumber is not null)
             {
-                prDiff = await gitHubApi.GetPullRequestDiff(repoName, prNumber);
+                prDiff = await gitHubApi.GetPullRequestDiff(prNumber);
             }
             else
             {

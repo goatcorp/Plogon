@@ -69,10 +69,10 @@ public class GitHubApi
     /// <param name="repo">The repo to use</param>
     /// <param name="prNum">The pull request number</param>
     /// <returns></returns>
-    public async Task<string> GetPullRequestDiff(string repo, string prNum)
+    public async Task<string> GetPullRequestDiff(string prNum)
     {
         using var client = new HttpClient();
-        return await client.GetStringAsync($"https://github.com/{repo}/pull/{prNum}.diff");
+        return await client.GetStringAsync($"https://github.com/{repoOwner}/{repoName}/pull/{prNum}.diff");
     }
 
     /// <summary>
