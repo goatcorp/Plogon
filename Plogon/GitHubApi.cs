@@ -113,6 +113,15 @@ public class GitHubApi
     public async Task SetPrLabels(int issueNumber, PrLabel label)
     {
         var managedLabels = new HashSet<string>();
+        
+        var existing = await this.ghClient.Issue.Labels.GetAllForIssue(repoOwner, repoName, issueNumber);
+        if (existing != null)
+        {
+            foreach (var existingLabel in existing)
+            {
+                managedLabels.Add(existingLabel.Name);
+            }
+        }
 
         if (label.HasFlag(PrLabel.NewPlugin))
             managedLabels.Add(PR_LABEL_NEW_PLUGIN);
@@ -139,15 +148,6 @@ public class GitHubApi
         else
             managedLabels.Remove(PR_LABEL_MOVE_CHANNEL);
 
-        var existing = await this.ghClient.Issue.Labels.GetAllForIssue(repoOwner, repoName, issueNumber);
-        if (existing != null)
-        {
-            foreach (var existingLabel in existing)
-            {
-                managedLabels.Add(existingLabel.Name);
-            }
-        }
-        
         await this.ghClient.Issue.Labels.ReplaceAllForIssue(repoOwner, repoName, issueNumber, managedLabels.ToArray());
     }
 }
