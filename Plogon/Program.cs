@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
+using Plogon.Repo;
 using Serilog;
 
 namespace Plogon;
@@ -12,7 +13,7 @@ namespace Plogon;
 class Program
 {
     private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
-    
+
     /// <summary>
     /// The main entry point for the application.
     /// </summary>
@@ -112,6 +113,9 @@ class Program
                 githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
+                
+                // label flags
+                var prLabels = GitHubApi.PrLabel.None;
 
                 foreach (var task in tasks)
                 {
@@ -143,6 +147,11 @@ class Program
                         buildsMd.AddRow("❔", $"{task.InternalName} [{task.Channel}]", fancyCommit, "Not ran");
                         continue;
                     }
+
+                    if (task.IsNewPlugin)
+                        prLabels |= GitHubApi.PrLabel.NewPlugin;
+                    else if (task.IsNewInThisChannel)
+                        prLabels |= GitHubApi.PrLabel.MoveChannel;
 
                     try
                     {
@@ -213,20 +222,23 @@ class Program
                             {
                                 buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                     $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - [Diff]({status.DiffUrl})");
+                                prLabels |= GitHubApi.PrLabel.VersionConflict;
                             }
                             else
                             {
                                 buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                     $"v{status.Version} - [Diff]({status.DiffUrl})");
                             }
-                            
+
                             if (!string.IsNullOrEmpty(prNumber) && !commit)
-                                await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit, prNumber);
+                                await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
+                                    prNumber);
 
                             if (commit)
                             {
                                 int? prInt = null;
-                                if (int.TryParse(await webservices.GetPrNumber(task.InternalName, task.Manifest.Plugin.Commit),
+                                if (int.TryParse(
+                                        await webservices.GetPrNumber(task.InternalName, task.Manifest.Plugin.Commit),
                                         out var commitPrNum))
                                 {
                                     // Let's try again here in case we didn't get it the first time around
@@ -238,7 +250,7 @@ class Program
 
                                     prInt = commitPrNum;
                                 }
-                                
+
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
                                 {
                                     InternalName = task.InternalName,
@@ -270,6 +282,15 @@ class Program
                         aborted = true;
                         anyFailed = true;
                     }
+                    catch (BuildProcessor.MissingIconException)
+                    {
+                        Log.Error("Missing icon!");
+                        buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                            "Missing icon in images/ build output!");
+                        anyFailed = true;
+
+                        prLabels |= GitHubApi.PrLabel.NeedIcon;
+                    }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
@@ -295,6 +316,9 @@ class Program
                     text = text.Replace("😰", "<:dogeatbee:539585692439674881>");
                     return text;
                 }
+                
+                if (aborted || anyFailed)
+                    prLabels |= GitHubApi.PrLabel.BuildFailed;
 
                 if (repoName != null && prNumber != null)
                 {
@@ -309,12 +333,14 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(int.Parse(prNumber));
+                    var prNum = int.Parse(prNumber);
+                    
+                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
                     
                     if (crossOutTask != null)
                         await crossOutTask;
                     
-                    var commentTask = gitHubApi?.AddComment(int.Parse(prNumber),
+                    var commentTask = gitHubApi?.AddComment(prNum,
                         commentText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
@@ -327,7 +353,7 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(int.Parse(prNumber));
+                        var prDesc = await gitHubApi!.GetIssueBody(prNum);
                         if (!string.IsNullOrEmpty(prDesc))
                             buildInfo += $"```\n{prDesc}\n```\n";
                     }
@@ -351,6 +377,9 @@ class Program
                         $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
                         hookTitle, ok ? "Accepted" : "Rejected");
                     await webservices.RegisterMessageId(prNumber!, id);
+
+                    if (gitHubApi != null)
+                        await gitHubApi.SetPrLabels(prNum, prLabels);
                 }
 
                 if (repoName != null && commit && anyTried)

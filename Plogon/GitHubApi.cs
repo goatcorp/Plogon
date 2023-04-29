@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Octokit;
@@ -89,5 +91,63 @@ public class GitHubApi
             throw new Exception("Could not get PR");
 
         return pr.Body;
+    }
+    
+    private const string PR_LABEL_NEW_PLUGIN = "new plugin";
+    private const string PR_LABEL_NEED_ICON = "need icon";
+    private const string PR_LABEL_BUILD_FAILED = "build failed";
+    private const string PR_LABEL_SAME_VERSION = "same version";
+    private const string PR_LABEL_MOVE_CHANNEL = "move channel";
+
+    [Flags]
+    public enum PrLabel
+    {
+        None = 0,
+        NewPlugin = 1 << 0,
+        NeedIcon = 1 << 1,
+        BuildFailed = 1 << 2,
+        VersionConflict = 1 << 3,
+        MoveChannel = 1 << 4,
+    }
+
+    public async Task SetPrLabels(int issueNumber, PrLabel label)
+    {
+        var managedLabels = new HashSet<string>();
+
+        if (label.HasFlag(PrLabel.NewPlugin))
+            managedLabels.Add(PR_LABEL_NEW_PLUGIN);
+        else
+            managedLabels.Remove(PR_LABEL_NEW_PLUGIN);
+        
+        if (label.HasFlag(PrLabel.NeedIcon))
+            managedLabels.Add(PR_LABEL_NEED_ICON);
+        else
+            managedLabels.Remove(PR_LABEL_NEED_ICON);
+        
+        if (label.HasFlag(PrLabel.BuildFailed))
+            managedLabels.Add(PR_LABEL_BUILD_FAILED);
+        else
+            managedLabels.Remove(PR_LABEL_BUILD_FAILED);
+        
+        if (label.HasFlag(PrLabel.VersionConflict))
+            managedLabels.Add(PR_LABEL_SAME_VERSION);
+        else
+            managedLabels.Remove(PR_LABEL_SAME_VERSION);
+        
+        if (label.HasFlag(PrLabel.MoveChannel))
+            managedLabels.Add(PR_LABEL_MOVE_CHANNEL);
+        else
+            managedLabels.Remove(PR_LABEL_MOVE_CHANNEL);
+
+        var existing = await this.ghClient.Issue.Labels.GetAllForIssue(repoOwner, repoName, issueNumber);
+        if (existing != null)
+        {
+            foreach (var existingLabel in existing)
+            {
+                managedLabels.Add(existingLabel.Name);
+            }
+        }
+        
+        await this.ghClient.Issue.Labels.ReplaceAllForIssue(repoOwner, repoName, issueNumber, managedLabels.ToArray());
     }
 }

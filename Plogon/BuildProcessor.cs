@@ -193,6 +193,7 @@ public class BuildProcessor
             foreach (var manifest in channel.Value)
             {
                 var state = this.pluginRepository.GetPluginState(channel.Key, manifest.Key);
+                var newInAnyChannel = this.pluginRepository.IsPluginInAnyChannel(manifest.Key);
 
                 if (state == null || state.BuiltCommit != manifest.Value.Plugin.Commit)
                 {
@@ -204,6 +205,8 @@ public class BuildProcessor
                         HaveCommit = state?.BuiltCommit,
                         HaveTimeBuilt = state?.TimeBuilt,
                         HaveVersion = state?.EffectiveVersion,
+                        IsNewPlugin = state == null && newInAnyChannel,
+                        IsNewInThisChannel = state == null && !newInAnyChannel,
                         Type = BuildTask.TaskType.Build,
                     });
                 }
@@ -661,7 +664,7 @@ public class BuildProcessor
         
         if (exitCode == 0 && !commit && File.Exists(Path.Combine(task.Manifest.Directory.FullName, "images", "icon.png")) == false)
         {
-            throw new Exception("icon.png is missing from images/.");
+            throw new MissingIconException();
         }
 
         await this.dockerClient.Containers.RemoveContainerAsync(containerCreateResponse.ID,
@@ -782,6 +785,21 @@ public class BuildProcessor
         /// <param name="inner">Actual error</param>
         public PluginCommitException(Exception inner)
             : base("Could not commit plugin.", inner)
+        {
+        }
+    }
+    
+    /// <summary>
+    /// Exception when icon is missing
+    /// </summary>
+    public class MissingIconException : Exception
+    {
+        /// <summary>
+        /// ctor
+        /// </summary>
+        /// <param name="inner">Actual error</param>
+        public MissingIconException()
+            : base("Missing icon.")
         {
         }
     }

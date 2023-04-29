@@ -80,6 +80,16 @@ public class PluginRepository
     }
 
     /// <summary>
+    /// Check if a plugin is in any channel
+    /// </summary>
+    /// <param name="plugin">InternalName of the plugin</param>
+    /// <returns></returns>
+    public bool IsPluginInAnyChannel(string plugin)
+    {
+        return this.State.Channels.Any(x => x.Value.Plugins.Any(y => y.Key == plugin));
+    }
+
+    /// <summary>
     /// Remove a plugin from the repository.
     /// </summary>
     /// <param name="channelName">The name of the channel</param>

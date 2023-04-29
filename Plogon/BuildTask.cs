@@ -19,6 +19,12 @@ public class BuildTask
     
     public string InternalName { get; set; }
     
+    // New in ANY channel
+    public bool IsNewPlugin { get; set; }
+    
+    // New in THIS channel
+    public bool IsNewInThisChannel { get; set; }
+    
     public TaskType Type { get; set; }
 
     public enum TaskType
