@@ -193,7 +193,7 @@ public class BuildProcessor
             foreach (var manifest in channel.Value)
             {
                 var state = this.pluginRepository.GetPluginState(channel.Key, manifest.Key);
-                var newInAnyChannel = this.pluginRepository.IsPluginInAnyChannel(manifest.Key);
+                var isInAnyChannel = this.pluginRepository.IsPluginInAnyChannel(manifest.Key);
 
                 if (state == null || state.BuiltCommit != manifest.Value.Plugin.Commit)
                 {
@@ -205,8 +205,8 @@ public class BuildProcessor
                         HaveCommit = state?.BuiltCommit,
                         HaveTimeBuilt = state?.TimeBuilt,
                         HaveVersion = state?.EffectiveVersion,
-                        IsNewPlugin = state == null && newInAnyChannel,
-                        IsNewInThisChannel = state == null && !newInAnyChannel,
+                        IsNewPlugin = state == null && !isInAnyChannel,
+                        IsNewInThisChannel = state == null && isInAnyChannel,
                         Type = BuildTask.TaskType.Build,
                     });
                 }
