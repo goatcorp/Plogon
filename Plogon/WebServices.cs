@@ -99,6 +99,9 @@ public class WebServices
         public string Dip17Track { get; set; } = null!;
         public int? PrNumber { get; set; }
         public string? Changelog { get; set; }
+        public bool IsInitialRelease { get; set; }
+        public int? DiffLinesAdded { get; set; }
+        public int? DiffLinesRemoved { get; set; }
     }
     
     public async Task StagePluginBuild(StagedPluginInfo info)

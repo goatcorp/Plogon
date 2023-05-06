@@ -99,6 +99,9 @@ public class GitHubApi
     private const string PR_LABEL_VERSION_CONFLICT = "version conflict";
     private const string PR_LABEL_MOVE_CHANNEL = "move channel";
 
+    /// <summary>
+    /// Labels for DIP17 PRs
+    /// </summary>
     [Flags]
     public enum PrLabel
     {

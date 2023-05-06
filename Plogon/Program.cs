@@ -259,6 +259,9 @@ class Program
                                     Dip17Track = task.Channel,
                                     PrNumber = prInt,
                                     Changelog = changelog,
+                                    IsInitialRelease = task.IsNewPlugin,
+                                    DiffLinesAdded = status.DiffLinesAdded,
+                                    DiffLinesRemoved = status.DiffLinesRemoved,
                                 });
                             }
                         }
