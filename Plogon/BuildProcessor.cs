@@ -313,10 +313,24 @@ public class BuildProcessor
         public string? Key { get; set; }
     };
 
+    /// <summary>
+    /// Info about a diff
+    /// </summary>
     public class PluginDiff
     {
-        public string DiffUrl;
+        /// <summary>
+        /// URL to reach the diff at
+        /// </summary>
+        public string DiffUrl = null!;
+        
+        /// <summary>
+        /// How many lines were added
+        /// </summary>
         public int DiffLinesAdded;
+        
+        /// <summary>
+        /// How many lines were removed
+        /// </summary>
         public int DiffLinesRemoved;
     }
     
@@ -848,7 +862,6 @@ public class BuildProcessor
         /// <summary>
         /// ctor
         /// </summary>
-        /// <param name="inner">Actual error</param>
         public MissingIconException()
             : base("Missing icon.")
         {
