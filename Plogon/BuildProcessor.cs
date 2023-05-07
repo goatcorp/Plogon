@@ -334,7 +334,7 @@ public class BuildProcessor
         public int DiffLinesRemoved;
     }
     
-    private async Task<PluginDiff> GetDiffUrl(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
+    private async Task<PluginDiff> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
         var internalName = task.InternalName;
         var haveCommit = task.HaveCommit;
@@ -675,7 +675,7 @@ public class BuildProcessor
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
-        var diffUrl = await GetDiffUrl(work, task, otherTasks);
+        var diff = await GetPluginDiff(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
         
@@ -872,7 +872,7 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
         
-        return new BuildResult(exitCode == 0, diffUrl, version, task);
+        return new BuildResult(exitCode == 0, diff, version, task);
     }
 
     /// <summary>
