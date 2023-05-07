@@ -408,22 +408,25 @@ public class BuildProcessor
         if (process.ExitCode != 0)
             throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
 
-        var regex = new Regex(@"((?<numInsertions>[0-9]+) insertions\(\+\))?(, )?((?<numDeletions>[0-9]+) deletions\(\-\))?");
+        var regex = new Regex(@"^\s*(?:(?<numFilesChanged>[0-9]+) files? changed)?(?:, )?(?:(?<numInsertions>[0-9]+) insertions?\(\+\))?(?:, )?(?:(?<numDeletions>[0-9]+) deletions?\(-\))?\s*$");
         var match = regex.Match(shortstatOutput);
 
         result.DiffLinesAdded = 0;
         result.DiffLinesRemoved = 0;
 
-        if (match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions.Value, out var linesAdded))
+        if (match.Success)
         {
-            result.DiffLinesAdded = linesAdded;
-        }
+            if (match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions.Value, out var linesAdded))
+            {
+                result.DiffLinesAdded = linesAdded;
+            }
         
-        if (match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions.Value, out var linesRemoved))
-        {
-            result.DiffLinesRemoved = linesRemoved;
+            if (match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions.Value, out var linesRemoved))
+            {
+                result.DiffLinesRemoved = linesRemoved;
+            }
         }
-        
+
         Log.Verbose("{Args}: {Output} - {Length}, +{LinesAdded} -{LinesRemoved}", diffPsi.Arguments, shortstatOutput, shortstatOutput.Length, result.DiffLinesAdded, result.DiffLinesRemoved);
 
         if (!string.IsNullOrEmpty(result.DiffUrl)) 
