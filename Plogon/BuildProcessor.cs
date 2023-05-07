@@ -385,6 +385,7 @@ public class BuildProcessor
             throw new Exception("Diff process was null.");
 
         var diffOutput = await process.StandardOutput.ReadToEndAsync();
+        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
 
         await process.WaitForExitAsync();
         if (process.ExitCode != 0)
@@ -406,13 +407,24 @@ public class BuildProcessor
         await process.WaitForExitAsync();
         if (process.ExitCode != 0)
             throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-        
-        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
 
         var regex = new Regex(@"((?<numInsertions>[0-9]+) insertions\(\+\))?(, )?((?<numDeletions>[0-9]+) deletions\(\-\))?");
         var match = regex.Match(shortstatOutput);
-        result.DiffLinesAdded = match.Groups.TryGetValue("numInsertions", out var gInsertions) ? int.Parse(gInsertions.Value) : 0;
-        result.DiffLinesRemoved = match.Groups.TryGetValue("numDeletions", out var gDeletions) ? int.Parse(gDeletions.Value) : 0;
+
+        result.DiffLinesAdded = 0;
+        result.DiffLinesRemoved = 0;
+
+        if (match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions.Value, out var linesAdded))
+        {
+            result.DiffLinesAdded = linesAdded;
+        }
+        
+        if (match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions.Value, out var linesRemoved))
+        {
+            result.DiffLinesRemoved = linesRemoved;
+        }
+        
+        Log.Verbose("{Args}: {Output} - {Length}, +{LinesAdded} -{LinesRemoved}", diffPsi.Arguments, shortstatOutput, shortstatOutput.Length, result.DiffLinesAdded, result.DiffLinesRemoved);
 
         if (!string.IsNullOrEmpty(result.DiffUrl)) 
             return result;
