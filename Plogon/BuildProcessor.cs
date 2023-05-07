@@ -577,6 +577,26 @@ public class BuildProcessor
         [JsonProperty]
         public string? InternalName { get; set; }
     }
+
+    static async Task RetryUntil(Func<Task> what, int maxTries = 10)
+    {
+        while (true)
+        {
+            try
+            {
+                await what();
+                return;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Task failed, tries left: {TriesLeft}", maxTries);
+
+                maxTries--;
+                if (maxTries <= 0)
+                    throw;
+            }
+        }
+    }
     
     /// <summary>
     /// Check out and build a plugin from a task
@@ -658,9 +678,9 @@ public class BuildProcessor
         var diffUrl = await GetDiffUrl(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
-
-        await GetNeeds(task, needs);
-        await RestoreAllPackages(task, work, packages);
+        
+        await RetryUntil(async () => await GetNeeds(task, needs));
+        await RetryUntil(async () => await RestoreAllPackages(task, work, packages));
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
         
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
