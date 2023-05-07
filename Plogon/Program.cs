@@ -263,6 +263,23 @@ class Program
                                     DiffLinesAdded = status.DiffLinesAdded,
                                     DiffLinesRemoved = status.DiffLinesRemoved,
                                 });
+
+                                if (status.DiffLinesAdded.HasValue)
+                                {
+                                    if (status.DiffLinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                    {
+                                        prLabels &= ~GitHubApi.PrLabel.SizeSmall;
+                                        prLabels |= GitHubApi.PrLabel.SizeMid;
+                                    }
+                                    else if (status.DiffLinesAdded > 1000)
+                                    {
+                                        prLabels &= ~GitHubApi.PrLabel.SizeSmall;
+                                        prLabels &= ~GitHubApi.PrLabel.SizeMid;
+                                        prLabels |= GitHubApi.PrLabel.SizeLarge;
+                                    }
+                                    else if (!prLabels.HasFlag(GitHubApi.PrLabel.SizeMid) && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                        prLabels |= GitHubApi.PrLabel.SizeSmall;
+                                }
                             }
                         }
                         else

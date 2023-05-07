@@ -101,6 +101,9 @@ public class GitHubApi
     private const string PR_LABEL_BUILD_FAILED = "build failed";
     private const string PR_LABEL_VERSION_CONFLICT = "version conflict";
     private const string PR_LABEL_MOVE_CHANNEL = "move channel";
+    private const string PR_LABEL_SIZE_SMALL = "size-small";
+    private const string PR_LABEL_SIZE_MID = "size-mid";
+    private const string PR_LABEL_SIZE_LARGE = "size-large";
 
     /// <summary>
     /// Labels for DIP17 PRs
@@ -137,6 +140,21 @@ public class GitHubApi
         /// "move channel"
         /// </summary>
         MoveChannel = 1 << 4,
+        
+        /// <summary>
+        /// "size-s"
+        /// </summary>
+        SizeSmall = 1 << 5,
+        
+        /// <summary>
+        /// "size-m"
+        /// </summary>
+        SizeMid = 1 << 6,
+        
+        /// <summary>
+        /// "size-l"
+        /// </summary>
+        SizeLarge = 1 << 7
     }
 
     /// <summary>
@@ -181,6 +199,21 @@ public class GitHubApi
             managedLabels.Add(PR_LABEL_MOVE_CHANNEL);
         else
             managedLabels.Remove(PR_LABEL_MOVE_CHANNEL);
+        
+        if (label.HasFlag(PrLabel.SizeSmall))
+            managedLabels.Add(PR_LABEL_SIZE_SMALL);
+        else
+            managedLabels.Remove(PR_LABEL_SIZE_SMALL);
+        
+        if (label.HasFlag(PrLabel.SizeMid))
+            managedLabels.Add(PR_LABEL_SIZE_MID);
+        else
+            managedLabels.Remove(PR_LABEL_SIZE_MID);
+        
+        if (label.HasFlag(PrLabel.SizeLarge))
+            managedLabels.Add(PR_LABEL_SIZE_LARGE);
+        else
+            managedLabels.Remove(PR_LABEL_SIZE_LARGE);
 
         await this.ghClient.Issue.Labels.ReplaceAllForIssue(repoOwner, repoName, issueNumber, managedLabels.ToArray());
     }
