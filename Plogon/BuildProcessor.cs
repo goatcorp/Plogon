@@ -409,11 +409,11 @@ public class BuildProcessor
         
         Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
 
-        var regex = new Regex(@"(?<numInsertions>[0-9]+) insertions\(\+\), (?<numDeletions>[0-9]+) deletions\(\-\)");
+        var regex = new Regex(@"((?<numInsertions>[0-9]+) insertions\(\+\))?(, )?((?<numDeletions>[0-9]+) deletions\(\-\))?");
         var match = regex.Match(shortstatOutput);
-        result.DiffLinesAdded = int.Parse(match.Groups["numInsertions"].Value);
-        result.DiffLinesRemoved = int.Parse(match.Groups["numDeletions"].Value);
-        
+        result.DiffLinesAdded = match.Groups.TryGetValue("numInsertions", out var gInsertions) ? int.Parse(gInsertions.Value) : 0;
+        result.DiffLinesRemoved = match.Groups.TryGetValue("numDeletions", out var gDeletions) ? int.Parse(gDeletions.Value) : 0;
+
         if (!string.IsNullOrEmpty(result.DiffUrl)) 
             return result;
 
