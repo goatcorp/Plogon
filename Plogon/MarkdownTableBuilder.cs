@@ -33,6 +33,19 @@ public class MarkdownTableBuilder
             var text = rows.Aggregate(string.Empty,
                 (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
 
+            string[] wordsToDelete =
+            {
+                "<sup>",
+                "</sup>",
+                "<sub>",
+                "</sub>",
+            };
+
+            foreach (var word in wordsToDelete)
+            {
+                text = text.Replace(word, string.Empty);
+            }
+
             if (!string.IsNullOrWhiteSpace(text))
                 return text[..^1];
             

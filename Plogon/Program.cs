@@ -219,7 +219,7 @@ class Program
                                 task.Manifest.Plugin.Commit, status.DiffUrl ?? "null", status.DiffLinesAdded ?? -1, status.DiffLinesRemoved ?? -1);
                             
                             var diffLink =
-                                $"[Diff]({status.DiffUrl})<sup><sub>({status.DiffLinesAdded} lines)</sub></sup>";
+                                $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines)</sub></sup>";
 
                             if (task.HaveVersion != null &&
                                 Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
@@ -237,6 +237,23 @@ class Program
                             if (!string.IsNullOrEmpty(prNumber) && !commit)
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
                                     prNumber);
+                            
+                            if (status.DiffLinesAdded.HasValue)
+                            {
+                                if (status.DiffLinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                {
+                                    prLabels &= ~GitHubApi.PrLabel.SizeSmall;
+                                    prLabels |= GitHubApi.PrLabel.SizeMid;
+                                }
+                                else if (status.DiffLinesAdded > 1000)
+                                {
+                                    prLabels &= ~GitHubApi.PrLabel.SizeSmall;
+                                    prLabels &= ~GitHubApi.PrLabel.SizeMid;
+                                    prLabels |= GitHubApi.PrLabel.SizeLarge;
+                                }
+                                else if (!prLabels.HasFlag(GitHubApi.PrLabel.SizeMid) && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                    prLabels |= GitHubApi.PrLabel.SizeSmall;
+                            }
 
                             if (commit)
                             {
@@ -266,23 +283,6 @@ class Program
                                     DiffLinesAdded = status.DiffLinesAdded,
                                     DiffLinesRemoved = status.DiffLinesRemoved,
                                 });
-
-                                if (status.DiffLinesAdded.HasValue)
-                                {
-                                    if (status.DiffLinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
-                                    {
-                                        prLabels &= ~GitHubApi.PrLabel.SizeSmall;
-                                        prLabels |= GitHubApi.PrLabel.SizeMid;
-                                    }
-                                    else if (status.DiffLinesAdded > 1000)
-                                    {
-                                        prLabels &= ~GitHubApi.PrLabel.SizeSmall;
-                                        prLabels &= ~GitHubApi.PrLabel.SizeMid;
-                                        prLabels |= GitHubApi.PrLabel.SizeLarge;
-                                    }
-                                    else if (!prLabels.HasFlag(GitHubApi.PrLabel.SizeMid) && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
-                                        prLabels |= GitHubApi.PrLabel.SizeSmall;
-                                }
                             }
                         }
                         else
