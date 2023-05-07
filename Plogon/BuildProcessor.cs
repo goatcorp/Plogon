@@ -455,6 +455,7 @@ public class BuildProcessor
             throw new Exception("Cat-file process was null.");
 
         await process.WaitForExitAsync();
+        Log.Verbose("CheckIfCommitExists: {Arguments}: {ExitCode}", psi.Arguments, process.ExitCode);
 
         return process.ExitCode == 0;
     }
