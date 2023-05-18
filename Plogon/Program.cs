@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Discord;
-using Plogon.Repo;
 using Serilog;
 
 namespace Plogon;
@@ -59,6 +58,15 @@ class Program
             Log.Verbose("GitHub API OK, running for {Actor}", actor);
         }
 
+        var secretsPk = Environment.GetEnvironmentVariable("PLOGON_SECRETS_PK");
+        if (string.IsNullOrEmpty(secretsPk))
+            throw new Exception("No secrets private key");
+        var secretsPkBytes = System.Text.Encoding.ASCII.GetBytes(secretsPk);
+
+        var secretsPkPassword = Environment.GetEnvironmentVariable("PLOGON_SECRETS_PK_PASSWORD");
+        if (string.IsNullOrEmpty(secretsPkPassword))
+            throw new Exception("No secrets private key password");
+
         var aborted = false;
         var numFailed = 0;
         var numTried = 0;
@@ -79,7 +87,7 @@ class Program
             }
 
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
-                artifactFolder, prDiff);
+                artifactFolder, secretsPkBytes, secretsPkPassword, prDiff);
             var tasks = buildProcessor.GetBuildTasks();
 
             GitHubOutputBuilder.StartGroup("List all tasks");

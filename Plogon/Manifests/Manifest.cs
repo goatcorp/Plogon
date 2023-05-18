@@ -13,6 +13,7 @@ public class Manifest
         public PluginInfo()
         {
             this.Owners = new List<string>();
+            this.Secrets = new Dictionary<string, string>();
         }
     
         public string Repository { get; set; }
@@ -26,6 +27,8 @@ public class Manifest
         public string Version { get; set; }
     
         public List<string> Owners { get; set; }
+        
+        public Dictionary<string, string> Secrets { get; set; }
     }
 
     public class BuildInfo

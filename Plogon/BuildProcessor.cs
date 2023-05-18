@@ -14,6 +14,7 @@ using Docker.DotNet.Models;
 using LibGit2Sharp;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using PgpCore;
 using Plogon.Manifests;
 using Plogon.Repo;
 using Serilog;
@@ -30,7 +31,9 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-    
+    private readonly byte[] secretsPrivateKeyBytes;
+    private readonly string secretsPrivateKeyPassword;
+
     private readonly DockerClient dockerClient;
 
     private static readonly string[] DalamudInternalDll = new[]
@@ -73,15 +76,19 @@ public class BuildProcessor
     /// <param name="workFolder">Work</param>
     /// <param name="staticFolder">Static</param>
     /// <param name="artifactFolder">Artifacts</param>
+    /// <param name="secretsPrivateKeyBytes">Private key for secrets in ASC format</param>
+    /// <param name="secretsPrivateKeyPassword">Password for the aforementioned private key</param>
     /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR</param>
     public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, string? prDiff)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, byte[] secretsPrivateKeyBytes, string secretsPrivateKeyPassword, string? prDiff)
     {
         this.repoFolder = repoFolder;
         this.manifestFolder = manifestFolder;
         this.workFolder = workFolder;
         this.staticFolder = staticFolder;
         this.artifactFolder = artifactFolder;
+        this.secretsPrivateKeyBytes = secretsPrivateKeyBytes;
+        this.secretsPrivateKeyPassword = secretsPrivateKeyPassword;
 
         this.pluginRepository = new PluginRepository(repoFolder);
         this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
@@ -607,6 +614,27 @@ public class BuildProcessor
             throw new Exception("Provided commit hash is not a valid Git SHA.");
     }
 
+    private async Task<Dictionary<string, string>> DecryptSecrets(BuildTask task)
+    {
+        if (task.Manifest!.Plugin.Secrets.Count == 0)
+            return new Dictionary<string, string>();
+        
+        // Load keys
+        EncryptionKeys encryptionKeys;
+        await using (Stream privateKeyStream = new MemoryStream(secretsPrivateKeyBytes))
+            encryptionKeys = new EncryptionKeys(privateKeyStream, secretsPrivateKeyPassword);
+
+        var pgp = new PGP(encryptionKeys);
+
+        var decrypted = new Dictionary<string, string>();
+        foreach (var secret in task.Manifest.Plugin.Secrets)
+        {
+            decrypted.Add(secret.Key, await pgp.DecryptArmoredStringAsync(secret.Value));
+        }
+
+        return decrypted;
+    }
+
     /// <summary>
     /// Check out and build a plugin from a task
     /// </summary>
@@ -694,6 +722,32 @@ public class BuildProcessor
         await RetryUntil(async () => await RestoreAllPackages(task, work, packages));
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
         
+        var dockerEnv = new List<string>
+        {
+            $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
+            $"PLOGON_PLUGIN_NAME={task.InternalName}",
+            $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
+            $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
+            "DALAMUD_LIB_PATH=/work/dalamud/"
+        };
+
+        // Decrypt secrets and add them as env vars to the container, so that msbuild can see them
+        var secrets = await DecryptSecrets(task);
+        foreach (var secret in secrets)
+        {
+            var bannedCharacters = new[] { '=', ';', '"' , '\''};
+            if (secret.Key.Any(x => bannedCharacters.Contains(x)) ||
+                secret.Value.Any(x => bannedCharacters.Contains(x)))
+            {
+                throw new Exception("Disallowed characters in secret name or value.");
+            }
+
+            var secretName = $"PLOGON_SECRET_{secret.Key}";
+            dockerEnv.Add($"{secretName}={secret.Value}");
+            
+            Log.Verbose("Added secret {Name}", secretName);
+        }
+        
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
@@ -718,14 +772,7 @@ public class BuildProcessor
                         $"{needs.FullName}:/needs:ro"
                     }
                 },
-                Env = new List<string>
-                {
-                    $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
-                    $"PLOGON_PLUGIN_NAME={task.InternalName}",
-                    $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
-                    $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
-                    "DALAMUD_LIB_PATH=/work/dalamud/"
-                },
+                Env = dockerEnv,
                 Entrypoint = new List<string>
                 {
                     "/static/entrypoint.sh"
