@@ -398,7 +398,7 @@ class Program
                         hookTitle += " updated";
                     }
 
-                    buildInfo += anyTried ? buildsMd.GetText(true) : "No builds made.";
+                    buildInfo += anyTried ? buildsMd.GetText(true, true) : "No builds made.";
                     buildInfo = ReplaceDiscordEmotes(buildInfo);
 
                     var nameTask = tasks.FirstOrDefault(x => x.Type == BuildTask.TaskType.Build);
