@@ -27,23 +27,26 @@ public class MarkdownTableBuilder
 
     public override string ToString() => GetText();
 
-    public string GetText(bool noTable = false) {
+    public string GetText(bool noTable = false, bool discord = false) {
         if (rows.Count == 1 || noTable)
         {
             var text = rows.Aggregate(string.Empty,
                 (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
 
-            string[] wordsToDelete =
+            if (discord)
             {
-                "<sup>",
-                "</sup>",
-                "<sub>",
-                "</sub>",
-            };
+                string[] wordsToDelete =
+                {
+                    "<sup>",
+                    "</sup>",
+                    "<sub>",
+                    "</sub>",
+                };
 
-            foreach (var word in wordsToDelete)
-            {
-                text = text.Replace(word, string.Empty);
+                foreach (var word in wordsToDelete)
+                {
+                    text = text.Replace(word, string.Empty);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(text))

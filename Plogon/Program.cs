@@ -413,7 +413,7 @@ class Program
                 if (repoName != null && commit && anyTried)
                 {
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red,
-                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
+                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
                         "Builds committed", string.Empty);
 
                     // TODO: We don't support this for removals for now

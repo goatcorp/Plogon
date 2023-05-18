@@ -597,7 +597,16 @@ public class BuildProcessor
             }
         }
     }
-    
+
+    private static void ParanoiaValidateTask(BuildTask task)
+    {
+        // Take care, this could still match a branch or tag name
+        // Verified by CheckIfTrueCommit() later
+        var gitShaRegex = new Regex("^[0-9a-f]{5,40}$");
+        if (!gitShaRegex.IsMatch(task.Manifest!.Plugin.Commit))
+            throw new Exception("Provided commit hash is not a valid Git SHA.");
+    }
+
     /// <summary>
     /// Check out and build a plugin from a task
     /// </summary>
@@ -626,6 +635,11 @@ public class BuildProcessor
         if (task.Manifest == null)
             throw new Exception("Manifest was null");
         
+        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Commit))
+            throw new Exception("No commit specified");
+        
+        ParanoiaValidateTask(task);
+        
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
@@ -640,9 +654,6 @@ public class BuildProcessor
         if (!task.Manifest.Plugin.Repository.StartsWith("https://") ||
             !task.Manifest.Plugin.Repository.EndsWith(".git"))
             throw new Exception("Only HTTPS repository URLs ending in .git are supported");
-
-        if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Commit))
-            throw new Exception("No commit specified");
 
         task.Manifest.Plugin.ProjectPath ??= string.Empty;
         
