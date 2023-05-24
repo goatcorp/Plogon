@@ -226,8 +226,11 @@ class Program
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl ?? "null", status.DiffLinesAdded ?? -1, status.DiffLinesRemoved ?? -1);
                             
+                            var prevVersionText = string.IsNullOrEmpty(status.PreviousVersion)
+                                ? string.Empty
+                                : $", prev. {status.PreviousVersion}";
                             var diffLink =
-                                $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines)</sub></sup>";
+                                $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines{prevVersionText})</sub></sup>";
 
                             if (task.HaveVersion != null &&
                                 Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))

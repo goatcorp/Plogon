@@ -542,6 +542,7 @@ public class BuildProcessor
             this.DiffLinesAdded = diff?.DiffLinesAdded;
             this.DiffLinesRemoved = diff?.DiffLinesRemoved;
             this.Version = version;
+            this.PreviousVersion = task.HaveVersion;
             this.Task = task;
         }
         
@@ -559,6 +560,11 @@ public class BuildProcessor
         /// The version of the plugin artifact
         /// </summary>
         public string? Version { get; private set; }
+        
+        /// <summary>
+        /// The previous version of this plugin in this channel
+        /// </summary>
+        public string? PreviousVersion { get; private set; }
         
         /// <summary>
         /// The task that was processed
