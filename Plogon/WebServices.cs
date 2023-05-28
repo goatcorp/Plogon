@@ -115,4 +115,30 @@ public class WebServices
         Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
+
+    public class Stats
+    {
+        public TimeSpan MeanMergeTimeNew { get; set; }
+        public TimeSpan MeanMergeTimeUpdate { get; set; }
+    }
+
+    public async Task<Stats?> GetStats()
+    {
+        try
+        {
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("X-XL-Key", this.key);
+            var result = await client.GetAsync(
+                "https://kamori.goats.dev/Plogon/Stats");
+
+            result.EnsureSuccessStatusCode();
+            return await result.Content.ReadFromJsonAsync<Stats>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Could not get stats");
+        }
+
+        return null;
+    }
 }

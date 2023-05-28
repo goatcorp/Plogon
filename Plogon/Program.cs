@@ -74,6 +74,10 @@ class Program
 
         var statuses = new List<BuildProcessor.BuildResult>();
 
+        WebServices.Stats? stats = null;
+        if (!commit)
+            stats = await webservices.GetStats();
+
         try
         {
             string? prDiff = null;
@@ -375,12 +379,27 @@ class Program
                     var prNum = int.Parse(prNumber);
                     
                     var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
-                    
+
+                    var anyComments = true;
                     if (crossOutTask != null)
-                        await crossOutTask;
+                        anyComments = await crossOutTask;
+
+                    var mergeTimeText = string.Empty;
+                    if (!anyComments && stats != null)
+                    {
+                        var timeText = stats.MeanMergeTimeNew.Hours switch
+                        {
+                            1 => "1 hour",
+                            > 1 => $"{stats.MeanMergeTimeNew.Hours} hours",
+                            _ => "less than an hour"
+                        };
+
+                        mergeTimeText =
+                            $"\nThe average merge time for new plugins is currently {timeText}.";
+                    }
                     
                     var commentTask = gitHubApi?.AddComment(prNum,
-                        commentText + "\n\n" + buildsMd + "\n##### " + links);
+                        commentText + mergeTimeText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
                         await commentTask;

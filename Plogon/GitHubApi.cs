@@ -46,7 +46,7 @@ public class GitHubApi
     /// For all comments left by the current user on an issue/PR, put them into a "details" md fold.
     /// </summary>
     /// <param name="issueNumber">issue/pr number</param>
-    public async Task CrossOutAllOfMyComments(int issueNumber)
+    public async Task<bool> CrossOutAllOfMyComments(int issueNumber)
     {
         var me = await this.ghClient.User.Current();
         if (me == null)
@@ -55,11 +55,13 @@ public class GitHubApi
         var comments = await this.ghClient.Issue.Comment.GetAllForIssue(repoOwner, repoName, issueNumber);
         if (comments == null)
             throw new Exception("Couldn't get issue comments");
-        
+
+        var any = false;
         foreach (var comment in comments)
         {
             if (comment.User.Id != me.Id)
                 continue;
+            any = true;
             
             // Only do this once
             if (comment.Body.StartsWith("<details>"))
@@ -68,6 +70,8 @@ public class GitHubApi
             var newComment = $"<details>\n<summary>Outdated attempt</summary>\n\n{comment.Body}\n</details>";
             await this.ghClient.Issue.Comment.Update(repoOwner, repoName, comment.Id, newComment);
         }
+
+        return any;
     }
 
     /// <summary>
