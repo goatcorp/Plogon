@@ -52,7 +52,7 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "7.0";
+    private const string DOCKER_TAG = "7.0.100";
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
     // If a plugin breaks with a missing runtime package you might want to add the package here.
