@@ -387,15 +387,16 @@ class Program
                     var mergeTimeText = string.Empty;
                     if (!anyComments && stats != null)
                     {
-                        var timeText = stats.MeanMergeTimeNew.Hours switch
+                        var timeText = stats.MeanMergeTimeUpdate.TotalHours switch
                         {
+                            < 1 => "less than an hour",
                             1 => "1 hour",
-                            > 1 => $"{stats.MeanMergeTimeNew.Hours} hours",
-                            _ => "less than an hour"
+                            > 1 and < 24 => $"{stats.MeanMergeTimeUpdate.Hours} hours",
+                            _ => "more than a day"
                         };
 
                         mergeTimeText =
-                            $"\nThe average merge time for new plugins is currently {timeText}.";
+                            $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
                     
                     var commentTask = gitHubApi?.AddComment(prNum,
