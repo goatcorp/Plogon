@@ -19,9 +19,9 @@ public class WebServices
     /// <summary>
     /// ctor
     /// </summary>
-    public WebServices()
+    public WebServices(string key)
     {
-        this.key = Environment.GetEnvironmentVariable("XLWEB_KEY")!;
+        this.key = key;
     }
 
     /// <summary>
