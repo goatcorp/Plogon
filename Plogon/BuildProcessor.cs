@@ -366,13 +366,15 @@ public class BuildProcessor
 
         var result = new PluginDiff();
 
+        var url = host.AbsoluteUri.Replace(".git", string.Empty);
+
         switch (host.Host)
         {
             case "github.com":
-                result.DiffUrl =  $"{host.AbsoluteUri[..^4]}/compare/{haveCommit}..{wantCommit}";
+                result.DiffUrl =  $"{url}/compare/{haveCommit}..{wantCommit}";
                 break;
             case "gitlab.com":
-                result.DiffUrl = $"{host.AbsoluteUri[..^4]}/-/compare/{haveCommit}...{wantCommit}";
+                result.DiffUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
                 break;
         }
         
@@ -438,6 +440,12 @@ public class BuildProcessor
 
         if (!string.IsNullOrEmpty(result.DiffUrl)) 
             return result;
+
+        if (haveCommit == emptyTree)
+        {
+            result.DiffUrl = url;
+            return result;
+        }
 
         var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
         res.EnsureSuccessStatusCode();

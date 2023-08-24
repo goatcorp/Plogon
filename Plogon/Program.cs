@@ -31,10 +31,10 @@ class Program
 
         var webhook = new DiscordWebhook();
         var webservices = new WebServices();
-        
+
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
-        
+
         var actor = Environment.GetEnvironmentVariable("PR_ACTOR");
         var repoParts = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")?.Split("/");
         var repoOwner = repoParts?[0];
@@ -50,10 +50,10 @@ class Program
 
             if (string.IsNullOrEmpty(repoOwner))
                 throw new Exception("repoOwner null or empty");
-            
+
             if (string.IsNullOrEmpty(repoName))
                 throw new Exception("repoName null or empty");
-            
+
             gitHubApi = new GitHubApi(repoOwner, repoName, token);
             Log.Verbose("GitHub API OK, running for {Actor}", actor);
         }
@@ -126,13 +126,14 @@ class Program
                 githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
-                
+
                 // label flags
                 var prLabels = GitHubApi.PrLabel.None;
 
                 foreach (var task in tasks)
                 {
                     string? fancyCommit = null;
+                    var url = task.Manifest!.Plugin.Repository.Replace(".git", string.Empty);
                     if (task.Manifest?.Plugin?.Commit != null)
                     {
                         fancyCommit = task.Manifest.Plugin.Commit.Length > 7
@@ -141,12 +142,10 @@ class Program
 
                         if (task.IsGitHub)
                         {
-                            var url = task.Manifest!.Plugin!.Repository.Replace(".git", string.Empty);
                             fancyCommit = $"[{fancyCommit}]({url}/commit/{task.Manifest.Plugin.Commit})";
                         }
                         else if (task.IsGitLab)
                         {
-                            var url = task.Manifest!.Plugin!.Repository.Replace(".git", string.Empty);
                             fancyCommit = $"[{fancyCommit}]({url}/-/commit/{task.Manifest.Plugin.Commit})";
                         }
                     }
@@ -229,11 +228,11 @@ class Program
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
                                 task.Manifest.Plugin.Commit, status.DiffUrl ?? "null", status.DiffLinesAdded ?? -1, status.DiffLinesRemoved ?? -1);
-                            
+
                             var prevVersionText = string.IsNullOrEmpty(status.PreviousVersion)
                                 ? string.Empty
                                 : $", prev. {status.PreviousVersion}";
-                            var diffLink =
+                            var diffLink = status.DiffUrl == url ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
                                 $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines{prevVersionText})</sub></sup>";
 
                             if (task.HaveVersion != null &&
@@ -252,7 +251,7 @@ class Program
                             if (!string.IsNullOrEmpty(prNumber) && !commit)
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
                                     prNumber);
-                            
+
                             if (status.DiffLinesAdded.HasValue)
                             {
                                 if (status.DiffLinesAdded > 1000)
@@ -356,7 +355,7 @@ class Program
                     text = text.Replace("😰", "<:dogeatbee:539585692439674881>");
                     return text;
                 }
-                
+
                 if (aborted || (numFailed > 0 && numFailed != numNoIcon))
                     prLabels |= GitHubApi.PrLabel.BuildFailed;
 
@@ -377,7 +376,7 @@ class Program
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
                     var prNum = int.Parse(prNumber);
-                    
+
                     var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
 
                     var anyComments = true;
@@ -398,7 +397,7 @@ class Program
                         mergeTimeText =
                             $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
-                    
+
                     var commentTask = gitHubApi?.AddComment(prNum,
                         commentText + mergeTimeText + "\n\n" + buildsMd + "\n##### " + links);
 
