@@ -133,8 +133,8 @@ class Program
                 foreach (var task in tasks)
                 {
                     string? fancyCommit = null;
-                    var url = task.Manifest!.Plugin.Repository.Replace(".git", string.Empty);
-                    if (task.Manifest?.Plugin?.Commit != null)
+                    var url = task.Manifest?.Plugin.Repository.Replace(".git", string.Empty);
+                    if (task.Manifest?.Plugin.Commit != null && url != null)
                     {
                         fancyCommit = task.Manifest.Plugin.Commit.Length > 7
                             ? task.Manifest.Plugin.Commit[..7]
