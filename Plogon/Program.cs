@@ -224,7 +224,7 @@ class Program
                             continue;
                         }
 
-                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName} ({task.Manifest!.Plugin!.Commit})");
+                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
 
                         if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) &&
                                           AlwaysBuildUsers.All(x => x != actor)))
@@ -241,7 +241,8 @@ class Program
                             continue;
                         }
 
-                        Log.Information("Need: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
+                        Log.Information("Need: {Name}[{Channel}] - {Sha} (have {HaveCommit})", task.InternalName,
+                            task.Channel,
                             task.Manifest.Plugin.Commit,
                             task.HaveCommit ?? "nothing");
 
