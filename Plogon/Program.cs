@@ -55,10 +55,7 @@ class Program
         SetupLogging();
 
         if (mode == ModeOfOperation.Unknown)
-        {
-            Log.Error("No mode of operation specified.");
-            return;
-        }
+            throw new Exception("No mode of operation specified.");
 
         var webhook = new DiscordWebhook();
         var webservices = new WebServices();
@@ -119,9 +116,9 @@ class Program
             {
                 prDiff = await gitHubApi.GetPullRequestDiff(prNumber);
             }
-            else
+            else if (mode == ModeOfOperation.PullRequest)
             {
-                Log.Information("Diff for PR is not available, this might lead to unnecessary builds being performed.");
+                Log.Error("Diff for PR is not available, this might lead to unnecessary builds being performed.");
             }
 
             buildOverridesFile ??= new FileInfo(Path.Combine(manifestFolder.FullName, "overrides.toml"));
@@ -411,7 +408,7 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var prNum = int.Parse(prNumber);
+                    var prNum = int.Parse(prNumber!);
 
                     var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
 
