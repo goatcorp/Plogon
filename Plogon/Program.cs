@@ -269,7 +269,7 @@ class Program
                                 $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines{prevVersionText})</sub></sup>";
 
                             if (task.HaveVersion != null &&
-                                Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
+                                Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion) && mode != ModeOfOperation.Continuous)
                             {
                                 buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                     $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - {diffLink}");
