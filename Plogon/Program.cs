@@ -269,17 +269,21 @@ class Program
                             var diffLink = status.DiffUrl == url ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
                                 $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines{prevVersionText})</sub></sup>";
 
-                            if (task.HaveVersion != null &&
-                                Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion) && mode != ModeOfOperation.Continuous)
+                            // We don't want to indicate success for continuous builds
+                            if (mode != ModeOfOperation.Continuous)
                             {
-                                buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                    $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - {diffLink}");
-                                prLabels |= GitHubApi.PrLabel.VersionConflict;
-                            }
-                            else
-                            {
-                                buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                    $"v{status.Version} - {diffLink}");
+                                if (task.HaveVersion != null &&
+                                    Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
+                                {
+                                    buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                        $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - {diffLink}");
+                                    prLabels |= GitHubApi.PrLabel.VersionConflict;
+                                }
+                                else
+                                {
+                                    buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                                        $"v{status.Version} - {diffLink}");
+                                }
                             }
 
                             if (!string.IsNullOrEmpty(prNumber) && mode == ModeOfOperation.PullRequest)
