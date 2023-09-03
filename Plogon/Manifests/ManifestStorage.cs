@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -12,13 +13,15 @@ namespace Plogon.Manifests;
 public class ManifestStorage
 {
     private readonly DirectoryInfo baseDirectory;
+    private readonly DateTime? cutoffDate;
     private readonly ISet<string>? affectedManifests;
 
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, Manifest>> Channels;
 
-    public ManifestStorage(DirectoryInfo baseDirectory, string? prDiff, bool ignoreNonAffected)
+    public ManifestStorage(DirectoryInfo baseDirectory, string? prDiff, bool ignoreNonAffected, DateTime? cutoffDate)
     {
         this.baseDirectory = baseDirectory;
+        this.cutoffDate = cutoffDate;
 
         if (prDiff is not null)
         {
@@ -52,6 +55,34 @@ public class ManifestStorage
                 var tomlFile = manifestDir.GetFiles("*.toml").First();
                 if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName) && ignoreNonAffected)
                     continue;
+
+                if (cutoffDate != null)
+                {
+                    var psi = new ProcessStartInfo("git",
+                        $"log -n 1 --pretty=format:%cd --date=iso-strict \"{tomlFile.FullName}\"")
+                    {
+                        RedirectStandardOutput = true,
+                        WorkingDirectory = this.baseDirectory.FullName,
+                    };
+
+                    var process = Process.Start(psi);
+                    if (process == null)
+                        throw new Exception("Date process was null.");
+
+                    var dateOutput = process.StandardOutput.ReadToEnd();
+
+                    process.WaitForExit();
+                    if (process.ExitCode != 0)
+                        throw new Exception($"Git could not get date for manifest: {process.ExitCode} -- {psi.Arguments}");
+
+                    var updateDate = DateTime.Parse(dateOutput);
+                    if (updateDate < cutoffDate)
+                    {
+                        Log.Information("Skipping manifest {Name} in {Channel} because it was updated at {Date} which is before the cutoff date of {CutoffDate}",
+                            manifestDir.Name, directory.Name, updateDate, cutoffDate);
+                        continue;
+                    }
+                }
                 
                 var tomlText = tomlFile.OpenText().ReadToEnd();
                 var manifest = Toml.ToModel<Manifest>(tomlText);

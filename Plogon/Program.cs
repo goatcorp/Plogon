@@ -136,6 +136,15 @@ class Program
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
             };
+
+            // HACK, we don't know the API level a plugin is for before building it...
+            // Feels like a design flaw, but we can't do much about it until we change how
+            // packager works
+            if (mode == ModeOfOperation.Continuous)
+            {
+                // API8 release
+                setup.CutoffDate = new DateTime(2023, 06, 10);
+            }
             
             var buildProcessor = new BuildProcessor(setup);
             var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);

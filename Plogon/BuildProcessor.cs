@@ -145,7 +145,7 @@ public class BuildProcessor
         this.allowNonDefaultImages = setup.AllowNonDefaultImages;
 
         this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder, setup.PrDiff, true);
+        this.manifestStorage = new ManifestStorage(manifestFolder, setup.PrDiff, true, setup.CutoffDate);
         this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
