@@ -13,14 +13,18 @@ public class DiscordWebhook
     /// <summary>
     /// Webhook client
     /// </summary>
-    public DiscordWebhookClient Client { get; }
+    public DiscordWebhookClient? Client { get; }
 
     /// <summary>
     /// Init with webhook from env var
     /// </summary>
     public DiscordWebhook()
     {
-        this.Client = new DiscordWebhookClient(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
+        var url = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK");
+        if (string.IsNullOrEmpty(url))
+            return;
+        
+        this.Client = new DiscordWebhookClient(url);
     }
 
     private static DateTime GetPacificStandardTime()
@@ -40,6 +44,9 @@ public class DiscordWebhook
     /// <param name="footer"></param>
     public async Task<ulong> Send(Color color, string message, string title, string footer)
     {
+        if (this.Client == null)
+            throw new Exception("Webhooks not set up");
+        
         var embed = new EmbedBuilder()
             .WithColor(color)
             .WithTitle(title)
