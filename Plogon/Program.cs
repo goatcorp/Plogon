@@ -21,11 +21,13 @@ class Program
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
     /// <param name="staticFolder">The 'static' folder that holds script files.</param>
     /// <param name="artifactFolder">The folder to store artifacts in.</param>
+    /// <param name="buildOverridesFile">Path to file containing build overrides.</param>
     /// <param name="ci">Running in CI.</param>
     /// <param name="commit">Commit to repo.</param>
     /// <param name="buildAll">Ignore actor checks.</param>
+    /// <param name="continuous">If we are running a continuous verification build.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, bool ci = false, bool commit = false, bool buildAll = false)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, FileInfo? buildOverridesFile = null, bool ci = false, bool commit = false, bool buildAll = false, bool continuous = false)
     {
         SetupLogging();
 
@@ -90,9 +92,10 @@ class Program
                 Log.Information("Diff for PR is not available, this might lead to unnecessary builds being performed.");
             }
 
+            buildOverridesFile ??= new FileInfo(Path.Combine(manifestFolder.FullName, "overrides.toml"));
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
-                artifactFolder, secretsPkBytes, secretsPkPassword, prDiff);
-            var tasks = buildProcessor.GetBuildTasks();
+                artifactFolder, buildOverridesFile, secretsPkBytes, secretsPkPassword, prDiff);
+            var tasks = buildProcessor.GetBuildTasks(continuous);
 
             GitHubOutputBuilder.StartGroup("List all tasks");
 

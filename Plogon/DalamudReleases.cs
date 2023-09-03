@@ -21,24 +21,18 @@ public class DalamudReleases
     
     private class Overrides
     {
-        public Overrides()
-        {
-            ChannelTracks = new Dictionary<string, string>();
-        }
-        
-        public Dictionary<string, string> ChannelTracks { get; set; }
+        public Dictionary<string, string> ChannelTracks { get; set; } = new();
     }
 
     /// <summary>
     /// ctor
     /// </summary>
+    /// <param name="overridesFile">File containing overrides.</param>
     /// <param name="releasesDir">Where releases should go</param>
-    /// <param name="manifestsDir">Where manifests are from</param>
-    public DalamudReleases(DirectoryInfo releasesDir, DirectoryInfo manifestsDir)
+    public DalamudReleases(FileInfo overridesFile, DirectoryInfo releasesDir)
     {
         this.ReleasesDir = releasesDir;
 
-        var overridesFile = new FileInfo(Path.Combine(manifestsDir.FullName, "overrides.toml"));
         if (overridesFile.Exists)
             this.overrides = Toml.ToModel<Overrides>(overridesFile.OpenText().ReadToEnd());
     }

@@ -67,7 +67,7 @@ public class BuildProcessor
     };
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
-    
+
     /// <summary>
     /// Set up build processor
     /// </summary>
@@ -76,11 +76,12 @@ public class BuildProcessor
     /// <param name="workFolder">Work</param>
     /// <param name="staticFolder">Static</param>
     /// <param name="artifactFolder">Artifacts</param>
+    /// <param name="buildOverridesFile">Path to file containing Dalamud version overrides.</param>
     /// <param name="secretsPrivateKeyBytes">Private key for secrets in ASC format</param>
     /// <param name="secretsPrivateKeyPassword">Password for the aforementioned private key</param>
     /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR</param>
     public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, byte[] secretsPrivateKeyBytes, string secretsPrivateKeyPassword, string? prDiff)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, FileInfo buildOverridesFile, byte[] secretsPrivateKeyBytes, string secretsPrivateKeyPassword, string? prDiff)
     {
         this.repoFolder = repoFolder;
         this.manifestFolder = manifestFolder;
@@ -92,7 +93,7 @@ public class BuildProcessor
 
         this.pluginRepository = new PluginRepository(repoFolder);
         this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
-        this.dalamudReleases = new DalamudReleases(workFolder.CreateSubdirectory("dalamud_releases_work"), manifestFolder);
+        this.dalamudReleases = new DalamudReleases(buildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
@@ -169,8 +170,9 @@ public class BuildProcessor
     /// <summary>
     /// Get all tasks that need to be done
     /// </summary>
+    /// <param name="continuous">If we are running a continuous verification build.</param>
     /// <returns>A set of tasks that are pending</returns>
-    public ISet<BuildTask> GetBuildTasks()
+    public ISet<BuildTask> GetBuildTasks(bool continuous)
     {
         var tasks = new HashSet<BuildTask>();
 
@@ -203,7 +205,7 @@ public class BuildProcessor
                 var state = this.pluginRepository.GetPluginState(channel.Key, manifest.Key);
                 var isInAnyChannel = this.pluginRepository.IsPluginInAnyChannel(manifest.Key);
 
-                if (state == null || state.BuiltCommit != manifest.Value.Plugin.Commit)
+                if (state == null || state.BuiltCommit != manifest.Value.Plugin.Commit || continuous)
                 {
                     tasks.Add(new BuildTask
                     {
