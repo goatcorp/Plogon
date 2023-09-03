@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Discord;
 using Serilog;
@@ -13,6 +14,29 @@ class Program
 {
     private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
 
+    private enum ModeOfOperation
+    {
+        /// <summary>
+        /// No mode set.
+        /// </summary>
+        Unknown,
+        
+        /// <summary>
+        /// We are building a plugin for someone in a Pull Request.
+        /// </summary>
+        PullRequest,
+        
+        /// <summary>
+        /// We are building pending plugins to submit them to the repo.
+        /// </summary>
+        Commit,
+        
+        /// <summary>
+        /// We are running a continuous verification build for Dalamud.
+        /// </summary>
+        Continuous,
+    }
+
     /// <summary>
     /// The main entry point for the application.
     /// </summary>
@@ -21,15 +45,20 @@ class Program
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
     /// <param name="staticFolder">The 'static' folder that holds script files.</param>
     /// <param name="artifactFolder">The folder to store artifacts in.</param>
+    /// <param name="mode">Mode to run Plogon in.</param>
     /// <param name="buildOverridesFile">Path to file containing build overrides.</param>
     /// <param name="ci">Running in CI.</param>
-    /// <param name="commit">Commit to repo.</param>
     /// <param name="buildAll">Ignore actor checks.</param>
-    /// <param name="continuous">If we are running a continuous verification build.</param>
     static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, FileInfo? buildOverridesFile = null, bool ci = false, bool commit = false, bool buildAll = false, bool continuous = false)
+        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, ModeOfOperation mode, FileInfo? buildOverridesFile = null, bool ci = false, bool buildAll = false)
     {
         SetupLogging();
+
+        if (mode == ModeOfOperation.Unknown)
+        {
+            Log.Error("No mode of operation specified.");
+            return;
+        }
 
         var webhook = new DiscordWebhook();
         var webservices = new WebServices();
@@ -42,6 +71,9 @@ class Program
         var repoOwner = repoParts?[0];
         var repoName = repoParts?[1];
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
+        
+        if (mode == ModeOfOperation.PullRequest && string.IsNullOrEmpty(prNumber))
+            throw new Exception("PR number not set");
 
         GitHubApi? gitHubApi = null;
         if (ci)
@@ -77,7 +109,7 @@ class Program
         var statuses = new List<BuildProcessor.BuildResult>();
 
         WebServices.Stats? stats = null;
-        if (!commit)
+        if (mode == ModeOfOperation.PullRequest)
             stats = await webservices.GetStats();
 
         try
@@ -95,7 +127,7 @@ class Program
             buildOverridesFile ??= new FileInfo(Path.Combine(manifestFolder.FullName, "overrides.toml"));
             var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
                 artifactFolder, buildOverridesFile, secretsPkBytes, secretsPkPassword, prDiff);
-            var tasks = buildProcessor.GetBuildTasks(continuous);
+            var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
 
             GitHubOutputBuilder.StartGroup("List all tasks");
 
@@ -172,13 +204,14 @@ class Program
                     {
                         if (task.Type == BuildTask.TaskType.Remove)
                         {
-                            if (!commit)
+                            // If we are not committing, removal tasks don't do anything and we should not consider them
+                            if (mode != ModeOfOperation.Commit)
                                 continue;
 
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
-                            var removeStatus = await buildProcessor.ProcessTask(task, commit, null, tasks);
+                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, tasks);
                             statuses.Add(removeStatus);
 
                             if (removeStatus.Success)
@@ -219,12 +252,12 @@ class Program
 
                         var changelog = task.Manifest.Plugin.Changelog;
                         if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null &&
-                            gitHubApi != null && commit)
+                            gitHubApi != null && mode == ModeOfOperation.Commit)
                         {
                             changelog = await gitHubApi.GetIssueBody(int.Parse(prNumber));
                         }
 
-                        var status = await buildProcessor.ProcessTask(task, commit, changelog, tasks);
+                        var status = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, tasks);
                         statuses.Add(status);
 
                         if (status.Success)
@@ -251,7 +284,7 @@ class Program
                                     $"v{status.Version} - {diffLink}");
                             }
 
-                            if (!string.IsNullOrEmpty(prNumber) && !commit)
+                            if (!string.IsNullOrEmpty(prNumber) && mode == ModeOfOperation.PullRequest)
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
                                     prNumber);
 
@@ -272,7 +305,7 @@ class Program
                                     prLabels |= GitHubApi.PrLabel.SizeSmall;
                             }
 
-                            if (commit)
+                            if (mode == ModeOfOperation.Commit)
                             {
                                 int? prInt = null;
                                 if (int.TryParse(
@@ -443,7 +476,7 @@ class Program
                         await gitHubApi.SetPrLabels(prNum, prLabels);
                 }
 
-                if (repoName != null && commit && anyTried)
+                if (repoName != null && mode == ModeOfOperation.Commit && anyTried && webhook.Client != null)
                 {
                     await webhook.Send(!anyFailed ? Color.Green : Color.Red,
                         $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
