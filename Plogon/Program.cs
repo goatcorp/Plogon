@@ -398,9 +398,9 @@ class Program
                 var anyTried = numTried > 0;
                 var anyFailed = numFailed > 0;
 
-                if (repoName != null && prNumber != null)
+                if (mode == ModeOfOperation.PullRequest)
                 {
-                    var existingMessages = await webservices.GetMessageIds(prNumber);
+                    var existingMessages = await webservices.GetMessageIds(prNumber!);
                     var alreadyPosted = existingMessages.Length > 0;
 
                     var links =

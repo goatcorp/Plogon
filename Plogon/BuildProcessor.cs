@@ -205,21 +205,25 @@ public class BuildProcessor
                 var state = this.pluginRepository.GetPluginState(channel.Key, manifest.Key);
                 var isInAnyChannel = this.pluginRepository.IsPluginInAnyChannel(manifest.Key);
 
-                if (state == null || state.BuiltCommit != manifest.Value.Plugin.Commit || continuous)
+                if (state != null && state.BuiltCommit == manifest.Value.Plugin.Commit && !continuous) 
+                    continue;
+
+                // HACK: Not building plugins with extended images yet in continuous mode
+                if (manifest.Value.Build?.Image != null && continuous)
+                    continue;
+                    
+                tasks.Add(new BuildTask
                 {
-                    tasks.Add(new BuildTask
-                    {
-                        InternalName = manifest.Key,
-                        Manifest = manifest.Value,
-                        Channel = channel.Key,
-                        HaveCommit = state?.BuiltCommit,
-                        HaveTimeBuilt = state?.TimeBuilt,
-                        HaveVersion = state?.EffectiveVersion,
-                        IsNewPlugin = state == null && !isInAnyChannel,
-                        IsNewInThisChannel = state == null && isInAnyChannel,
-                        Type = BuildTask.TaskType.Build,
-                    });
-                }
+                    InternalName = manifest.Key,
+                    Manifest = manifest.Value,
+                    Channel = channel.Key,
+                    HaveCommit = state?.BuiltCommit,
+                    HaveTimeBuilt = state?.TimeBuilt,
+                    HaveVersion = state?.EffectiveVersion,
+                    IsNewPlugin = state == null && !isInAnyChannel,
+                    IsNewInThisChannel = state == null && isInAnyChannel,
+                    Type = BuildTask.TaskType.Build,
+                });
             }
         }
 
