@@ -33,6 +33,7 @@ public class BuildProcessor
     private readonly DirectoryInfo artifactFolder;
     private readonly byte[] secretsPrivateKeyBytes;
     private readonly string secretsPrivateKeyPassword;
+    private readonly bool allowNonDefaultImages;
 
     private readonly DockerClient dockerClient;
 
@@ -69,31 +70,83 @@ public class BuildProcessor
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
 
     /// <summary>
+    /// Parameters for build processor.
+    /// </summary>
+    public struct BuildProcessorSetup
+    {
+        /// <summary>
+        /// Directory containing build output.
+        /// </summary>
+        public DirectoryInfo RepoFolder { get; set; }
+        
+        /// <summary>
+        /// Directory containing manifests.
+        /// </summary>
+        public DirectoryInfo ManifestFolder { get; set; }
+        
+        /// <summary>
+        /// Directory builds will be made in.
+        /// </summary>
+        public DirectoryInfo WorkFolder { get; set; }
+        
+        /// <summary>
+        /// Directory containing static files.
+        /// </summary>
+        public DirectoryInfo StaticFolder { get; set; }
+        
+        /// <summary>
+        /// Directory artifacts will be stored in.
+        /// </summary>
+        public DirectoryInfo ArtifactFolder { get; set; }
+        
+        /// <summary>
+        /// Path to file containing overrides for the Dalamud version used.
+        /// </summary>
+        public FileInfo BuildOverridesFile { get; set; }
+        
+        /// <summary>
+        /// Whether or not non-default build images are allowed.
+        /// </summary>
+        public bool AllowNonDefaultImages { get; set; }
+        
+        /// <summary>
+        /// When set, plugins whose manifest was modified before this date will not be built.
+        /// </summary>
+        public DateTime? CutoffDate{ get; set; }
+        
+        /// <summary>
+        /// Bytes of the secrets private key.
+        /// </summary>
+        public byte[] SecretsPrivateKeyBytes{ get; set; }
+        
+        /// <summary>
+        /// Password for the aforementioned private key.
+        /// </summary>
+        public string SecretsPrivateKeyPassword { get; set; }
+        
+        /// <summary>
+        /// Diff in unified format that contains the changes requested by the PR we are running as
+        /// </summary>
+        public string? PrDiff { get; set; }
+    }
+    
+    /// <summary>
     /// Set up build processor
     /// </summary>
-    /// <param name="repoFolder">Repo</param>
-    /// <param name="manifestFolder">Manifests</param>
-    /// <param name="workFolder">Work</param>
-    /// <param name="staticFolder">Static</param>
-    /// <param name="artifactFolder">Artifacts</param>
-    /// <param name="buildOverridesFile">Path to file containing Dalamud version overrides.</param>
-    /// <param name="secretsPrivateKeyBytes">Private key for secrets in ASC format</param>
-    /// <param name="secretsPrivateKeyPassword">Password for the aforementioned private key</param>
-    /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR</param>
-    public BuildProcessor(DirectoryInfo repoFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, FileInfo buildOverridesFile, byte[] secretsPrivateKeyBytes, string secretsPrivateKeyPassword, string? prDiff)
+    public BuildProcessor(BuildProcessorSetup setup)
     {
-        this.repoFolder = repoFolder;
-        this.manifestFolder = manifestFolder;
-        this.workFolder = workFolder;
-        this.staticFolder = staticFolder;
-        this.artifactFolder = artifactFolder;
-        this.secretsPrivateKeyBytes = secretsPrivateKeyBytes;
-        this.secretsPrivateKeyPassword = secretsPrivateKeyPassword;
+        this.repoFolder = setup.RepoFolder;
+        this.manifestFolder = setup.ManifestFolder;
+        this.workFolder = setup.WorkFolder;
+        this.staticFolder = setup.StaticFolder;
+        this.artifactFolder = setup.ArtifactFolder;
+        this.secretsPrivateKeyBytes = setup.SecretsPrivateKeyBytes;
+        this.secretsPrivateKeyPassword = setup.SecretsPrivateKeyPassword;
+        this.allowNonDefaultImages = setup.AllowNonDefaultImages;
 
         this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder, prDiff, true);
-        this.dalamudReleases = new DalamudReleases(buildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
+        this.manifestStorage = new ManifestStorage(manifestFolder, setup.PrDiff, true);
+        this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
     }
@@ -208,8 +261,7 @@ public class BuildProcessor
                 if (state != null && state.BuiltCommit == manifest.Value.Plugin.Commit && !continuous) 
                     continue;
 
-                // HACK: Not building plugins with extended images yet in continuous mode
-                if (manifest.Value.Build?.Image != null && continuous)
+                if (manifest.Value.Build?.Image != null && !allowNonDefaultImages)
                     continue;
                     
                 tasks.Add(new BuildTask

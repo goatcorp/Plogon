@@ -122,8 +122,22 @@ class Program
             }
 
             buildOverridesFile ??= new FileInfo(Path.Combine(manifestFolder.FullName, "overrides.toml"));
-            var buildProcessor = new BuildProcessor(outputFolder, manifestFolder, workFolder, staticFolder,
-                artifactFolder, buildOverridesFile, secretsPkBytes, secretsPkPassword, prDiff);
+            var setup = new BuildProcessor.BuildProcessorSetup
+            {
+                RepoFolder = outputFolder,
+                ManifestFolder = manifestFolder,
+                WorkFolder = workFolder,
+                StaticFolder = staticFolder,
+                ArtifactFolder = artifactFolder,
+                BuildOverridesFile = buildOverridesFile,
+                SecretsPrivateKeyBytes = secretsPkBytes,
+                SecretsPrivateKeyPassword = secretsPkPassword,
+                PrDiff = prDiff,
+                AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
+                CutoffDate = null,
+            };
+            
+            var buildProcessor = new BuildProcessor(setup);
             var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
 
             GitHubOutputBuilder.StartGroup("List all tasks");
