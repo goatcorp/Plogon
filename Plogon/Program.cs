@@ -432,6 +432,10 @@ class Program
                         $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
+
+                    // API9
+                    commentText = "**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it!\n\n";
+
                     if (!anyTried)
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
