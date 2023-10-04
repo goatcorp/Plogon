@@ -980,13 +980,17 @@ public class BuildProcessor
                         Directory.Move(imagesSourcePath, imagesDestinationPath);
                     }
 
-                    // DELETE THIS!!
                     var manifestFile = new FileInfo(Path.Combine(repoOutputDir.FullName, $"{task.InternalName}.json"));
                     var manifestText = await File.ReadAllTextAsync(manifestFile.FullName);
                     
                     var manifestObj = JObject.Parse(manifestText);
                     manifestObj["_isDip17Plugin"] = true;
                     manifestObj["_Dip17Channel"] = task.Channel;
+                    
+                    // Get this from an API or something
+                    var apiLevel = manifestObj["DalamudApiLevel"]?.Value<int>();
+                    if (apiLevel is not PlogonSystemDefine.API_LEVEL)
+                        throw new ApiLevelException(apiLevel ?? 0, PlogonSystemDefine.API_LEVEL);
                     
                     await File.WriteAllTextAsync(manifestFile.FullName, manifestObj.ToString());
                 }
@@ -1031,6 +1035,32 @@ public class BuildProcessor
         public MissingIconException()
             : base("Missing icon.")
         {
+        }
+    }
+
+    /// <summary>
+    /// Exception when wrong API level is used
+    /// </summary>
+    public class ApiLevelException : Exception
+    {
+        /// <summary>
+        /// Have version
+        /// </summary>
+        public int Have { get; }
+        
+        /// <summary>
+        /// Want version
+        /// </summary>
+        public int Want { get; }
+
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public ApiLevelException(int have, int want)
+            : base("Wrong API level.")
+        {
+            Have = have;
+            Want = want;
         }
     }
 }

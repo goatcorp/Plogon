@@ -391,6 +391,16 @@ class Program
 
                         prLabels |= GitHubApi.PrLabel.NeedIcon;
                     }
+                    catch (BuildProcessor.ApiLevelException api)
+                    {
+                        Log.Error("Bad API level!");
+                        buildsMd.AddRow("🚦", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                            $"Wrong API level! (have: {api.Have}, need: {api.Want})");
+                        numFailed++;
+                        numNoIcon++;
+
+                        prLabels |= GitHubApi.PrLabel.VersionConflict;
+                    }
                     catch (Exception ex)
                     {
                         Log.Error(ex, "Could not build");
