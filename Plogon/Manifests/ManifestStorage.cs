@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Serilog;
 using Tomlyn;
+
 #pragma warning disable CS1591
 
 namespace Plogon.Manifests;
@@ -53,13 +54,14 @@ public class ManifestStorage
             try
             {
                 var tomlFile = manifestDir.GetFiles("*.toml").First();
-                if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName) && ignoreNonAffected)
+                if (affectedManifests is not null && !affectedManifests.Contains(tomlFile.FullName) &&
+                    ignoreNonAffected)
                     continue;
 
                 if (cutoffDate != null)
                 {
                     var psi = new ProcessStartInfo("git",
-                        $"log -n 1 --pretty=format:%cd --date=iso-strict \"{tomlFile.FullName}\"")
+                                                   $"log -n 1 --pretty=format:%cd --date=iso-strict \"{tomlFile.FullName}\"")
                     {
                         RedirectStandardOutput = true,
                         WorkingDirectory = this.baseDirectory.FullName,
@@ -73,17 +75,19 @@ public class ManifestStorage
 
                     process.WaitForExit();
                     if (process.ExitCode != 0)
-                        throw new Exception($"Git could not get date for manifest: {process.ExitCode} -- {psi.Arguments}");
+                        throw new Exception(
+                            $"Git could not get date for manifest: {process.ExitCode} -- {psi.Arguments}");
 
                     var updateDate = DateTime.Parse(dateOutput);
                     if (updateDate < cutoffDate)
                     {
-                        Log.Information("Skipping manifest {Name} in {Channel} because it was updated at {Date} which is before the cutoff date of {CutoffDate}",
+                        Log.Information(
+                            "Skipping manifest {Name} in {Channel} because it was updated at {Date} which is before the cutoff date of {CutoffDate}",
                             manifestDir.Name, directory.Name, updateDate, cutoffDate);
                         continue;
                     }
                 }
-                
+
                 var tomlText = tomlFile.OpenText().ReadToEnd();
                 var manifest = Toml.ToModel<Manifest>(tomlText);
 
@@ -98,11 +102,11 @@ public class ManifestStorage
 
         return manifests;
     }
-    
+
     private ISet<string> GetAffectedManifestsFromDiff(string prDiff)
     {
         var manifestFiles = new HashSet<string>();
-        
+
         var rx = new Regex(@"((?:\+\+\+\s+b\/)|(?:rename to\s+))(.*\.toml)", RegexOptions.IgnoreCase);
         foreach (Match match in rx.Matches(prDiff))
         {

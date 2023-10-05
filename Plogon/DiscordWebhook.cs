@@ -23,7 +23,7 @@ public class DiscordWebhook
         var url = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK");
         if (string.IsNullOrEmpty(url))
             return;
-        
+
         this.Client = new DiscordWebhookClient(url);
     }
 
@@ -34,7 +34,7 @@ public class DiscordWebhook
         var pacificTime = TimeZoneInfo.ConvertTimeFromUtc(utc, pacificZone);
         return pacificTime;
     }
-    
+
     /// <summary>
     /// Send a webhook
     /// </summary>
@@ -46,13 +46,13 @@ public class DiscordWebhook
     {
         if (this.Client == null)
             throw new Exception("Webhooks not set up");
-        
+
         var embed = new EmbedBuilder()
-            .WithColor(color)
-            .WithTitle(title)
-            .WithFooter(footer)
-            .WithDescription(message)
-            .Build();
+                    .WithColor(color)
+                    .WithTitle(title)
+                    .WithFooter(footer)
+                    .WithDescription(message)
+                    .Build();
 
         var time = GetPacificStandardTime();
         var username = "Plo";
@@ -62,7 +62,7 @@ public class DiscordWebhook
             username = "Gon";
             avatarUrl = "https://goatcorp.github.io/icons/gon.png";
         }
-        
+
         return await this.Client.SendMessageAsync(embeds: new[] { embed }, username: username, avatarUrl: avatarUrl);
     }
 }
