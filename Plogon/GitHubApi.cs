@@ -62,7 +62,7 @@ public class GitHubApi
             if (comment.User.Id != me.Id)
                 continue;
             any = true;
-            
+
             // Only do this once
             if (comment.Body.StartsWith("<details>"))
                 continue;
@@ -99,7 +99,7 @@ public class GitHubApi
 
         return pr.Body;
     }
-    
+
     private const string PR_LABEL_NEW_PLUGIN = "new plugin";
     private const string PR_LABEL_NEED_ICON = "need icon";
     private const string PR_LABEL_BUILD_FAILED = "build failed";
@@ -119,42 +119,42 @@ public class GitHubApi
         /// No label
         /// </summary>
         None = 0,
-        
+
         /// <summary>
         /// "new plugin"
         /// </summary>
         NewPlugin = 1 << 0,
-        
+
         /// <summary>
         /// "need icon"
         /// </summary>
         NeedIcon = 1 << 1,
-        
+
         /// <summary>
         /// "build failed"
         /// </summary>
         BuildFailed = 1 << 2,
-        
+
         /// <summary>
         /// "version conflict"
         /// </summary>
         VersionConflict = 1 << 3,
-        
+
         /// <summary>
         /// "move channel"
         /// </summary>
         MoveChannel = 1 << 4,
-        
+
         /// <summary>
         /// "size-s"
         /// </summary>
         SizeSmall = 1 << 5,
-        
+
         /// <summary>
         /// "size-m"
         /// </summary>
         SizeMid = 1 << 6,
-        
+
         /// <summary>
         /// "size-l"
         /// </summary>
@@ -169,7 +169,7 @@ public class GitHubApi
     public async Task SetPrLabels(int issueNumber, PrLabel label)
     {
         var managedLabels = new HashSet<string>();
-        
+
         var existing = await this.ghClient.Issue.Labels.GetAllForIssue(repoOwner, repoName, issueNumber);
         if (existing != null)
         {
@@ -183,37 +183,37 @@ public class GitHubApi
             managedLabels.Add(PR_LABEL_NEW_PLUGIN);
         else
             managedLabels.Remove(PR_LABEL_NEW_PLUGIN);
-        
+
         if (label.HasFlag(PrLabel.NeedIcon))
             managedLabels.Add(PR_LABEL_NEED_ICON);
         else
             managedLabels.Remove(PR_LABEL_NEED_ICON);
-        
+
         if (label.HasFlag(PrLabel.BuildFailed))
             managedLabels.Add(PR_LABEL_BUILD_FAILED);
         else
             managedLabels.Remove(PR_LABEL_BUILD_FAILED);
-        
+
         if (label.HasFlag(PrLabel.VersionConflict))
             managedLabels.Add(PR_LABEL_VERSION_CONFLICT);
         else
             managedLabels.Remove(PR_LABEL_VERSION_CONFLICT);
-        
+
         if (label.HasFlag(PrLabel.MoveChannel))
             managedLabels.Add(PR_LABEL_MOVE_CHANNEL);
         else
             managedLabels.Remove(PR_LABEL_MOVE_CHANNEL);
-        
+
         if (label.HasFlag(PrLabel.SizeSmall))
             managedLabels.Add(PR_LABEL_SIZE_SMALL);
         else
             managedLabels.Remove(PR_LABEL_SIZE_SMALL);
-        
+
         if (label.HasFlag(PrLabel.SizeMid))
             managedLabels.Add(PR_LABEL_SIZE_MID);
         else
             managedLabels.Remove(PR_LABEL_SIZE_MID);
-        
+
         if (label.HasFlag(PrLabel.SizeLarge))
             managedLabels.Add(PR_LABEL_SIZE_LARGE);
         else
