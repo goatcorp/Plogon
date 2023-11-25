@@ -15,14 +15,14 @@ namespace Plogon;
 /// </summary>
 public class WebServices
 {
-    private readonly string key;
+    private readonly string? key;
 
     /// <summary>
     /// ctor
     /// </summary>
     public WebServices()
     {
-        this.key = Environment.GetEnvironmentVariable("XLWEB_KEY")!;
+        this.key = Environment.GetEnvironmentVariable("XLWEB_KEY");
     }
 
     /// <summary>
@@ -32,6 +32,8 @@ public class WebServices
     /// <param name="messageId"></param>
     public async Task RegisterMessageId(string prNumber, ulong messageId)
     {
+        if (this.key is null) return;
+
         using var client = new HttpClient();
         var result = await client.PostAsync(
                          $"https://kamori.goats.dev/Plogon/RegisterMessageId?key={this.key}&prNumber={prNumber}&messageId={messageId}",
@@ -46,6 +48,8 @@ public class WebServices
     /// <returns></returns>
     public async Task<string[]> GetMessageIds(string prNumber)
     {
+        if (this.key is null) return Array.Empty<string>();
+
         using var client = new HttpClient();
         var result = await client.GetAsync(
                          $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}");
@@ -62,6 +66,8 @@ public class WebServices
     /// <param name="prNumber"></param>
     public async Task RegisterPrNumber(string internalName, string version, string prNumber)
     {
+        if (this.key is null) return;
+
         using var client = new HttpClient();
         var result = await client.PostAsync(
                          $"https://kamori.goats.dev/Plogon/RegisterVersionPrNumber?key={this.key}&prNumber={prNumber}&internalName={internalName}&version={version}",
@@ -79,6 +85,8 @@ public class WebServices
     /// <returns></returns>
     public async Task<string?> GetPrNumber(string internalName, string version)
     {
+        if (this.key is null) return null;
+
         using var client = new HttpClient();
         var result = await client.GetAsync(
                          $"https://kamori.goats.dev/Plogon/GetVersionChangelog?internalName={internalName}&version={version}");
@@ -107,6 +115,8 @@ public class WebServices
 
     public async Task StagePluginBuild(StagedPluginInfo info)
     {
+        if (this.key is null) return;
+
         using var client = new HttpClient();
         client.DefaultRequestHeaders.Add("X-XL-Key", this.key);
         var result = await client.PostAsync(
@@ -125,6 +135,8 @@ public class WebServices
 
     public async Task<Stats?> GetStats()
     {
+        if (this.key is null) return null;
+
         try
         {
             using var client = new HttpClient();

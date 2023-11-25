@@ -31,8 +31,8 @@ public class BuildProcessor
     private readonly DirectoryInfo workFolder;
     private readonly DirectoryInfo staticFolder;
     private readonly DirectoryInfo artifactFolder;
-    private readonly byte[] secretsPrivateKeyBytes;
-    private readonly string secretsPrivateKeyPassword;
+    private readonly byte[]? secretsPrivateKeyBytes;
+    private readonly string? secretsPrivateKeyPassword;
     private readonly bool allowNonDefaultImages;
 
     private readonly DockerClient dockerClient;
@@ -121,12 +121,12 @@ public class BuildProcessor
         /// <summary>
         /// Bytes of the secrets private key.
         /// </summary>
-        public byte[] SecretsPrivateKeyBytes { get; set; }
+        public byte[]? SecretsPrivateKeyBytes { get; set; }
 
         /// <summary>
         /// Password for the aforementioned private key.
         /// </summary>
-        public string SecretsPrivateKeyPassword { get; set; }
+        public string? SecretsPrivateKeyPassword { get; set; }
 
         /// <summary>
         /// Diff in unified format that contains the changes requested by the PR we are running as
@@ -712,7 +712,9 @@ public class BuildProcessor
 
     private async Task<Dictionary<string, string>> DecryptSecrets(BuildTask task)
     {
-        if (task.Manifest!.Plugin.Secrets.Count == 0)
+        if (this.secretsPrivateKeyBytes is null
+            || this.secretsPrivateKeyPassword is null
+            || task.Manifest!.Plugin.Secrets.Count == 0)
             return new Dictionary<string, string>();
 
         // Load keys
