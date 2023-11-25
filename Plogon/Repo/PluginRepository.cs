@@ -18,7 +18,7 @@ public class PluginRepository
     /// Current state of the repository
     /// </summary>
     public State State { get; private set; }
-
+    
     /// <summary>
     /// Initializes a new instance of the <see cref="PluginRepository"/> class.
     /// </summary>
@@ -26,7 +26,7 @@ public class PluginRepository
     public PluginRepository(DirectoryInfo repoDirectory)
     {
         this.repoDirectory = repoDirectory;
-
+        
         if (StateFile.Exists)
         {
             this.State = Toml.ToModel<State>(StateFile.OpenText().ReadToEnd());
@@ -36,7 +36,7 @@ public class PluginRepository
             this.State = new State();
             Log.Information("State for repo at {repo} does not exist, creating new one", repoDirectory.FullName);
         }
-
+        
         Log.Information("Plugin repository at {repo} initialized", repoDirectory.FullName);
     }
 
@@ -55,7 +55,7 @@ public class PluginRepository
     {
         return this.repoDirectory.CreateSubdirectory(channelName).CreateSubdirectory(plugin);
     }
-
+    
     /// <summary>
     /// Get the state of a plugin on the repo
     /// </summary>
@@ -68,9 +68,9 @@ public class PluginRepository
         {
             return null;
         }
-
+        
         var channel = this.State.Channels[channelName];
-
+        
         if (channel.Plugins.TryGetValue(plugin, out var pluginState))
         {
             return pluginState;
@@ -108,14 +108,13 @@ public class PluginRepository
     /// <param name="haveCommit">Commit that is now have</param>
     /// <param name="effectiveVersion">New version of the plugin</param>
     /// <param name="changelog">Plugin changelog</param>
-    public void UpdatePluginHave(
-        string channelName, string plugin, string haveCommit, string effectiveVersion, string? changelog)
+    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? changelog)
     {
         if (!this.State.Channels.ContainsKey(channelName))
         {
             this.State.Channels[channelName] = new State.Channel();
         }
-
+        
         var channel = this.State.Channels[channelName];
 
         if (channel.Plugins.TryGetValue(plugin, out var pluginState))

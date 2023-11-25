@@ -18,7 +18,7 @@ public class DalamudReleases
     private const string URL_TEMPLATE = "https://kamori.goats.dev/Dalamud/Release/VersionInfo?track={0}";
 
     private readonly Overrides? overrides;
-
+    
     private class Overrides
     {
         public Dictionary<string, string> ChannelTracks { get; set; } = new();
@@ -36,12 +36,12 @@ public class DalamudReleases
         if (overridesFile.Exists)
             this.overrides = Toml.ToModel<Overrides>(overridesFile.OpenText().ReadToEnd());
     }
-
+    
     /// <summary>
     /// Where releases go
     /// </summary>
     public DirectoryInfo ReleasesDir { get; }
-
+    
     private async Task<DalamudVersionInfo?> GetVersionInfoForTrackAsync(string track)
     {
         var dalamudTrack = "release";
@@ -50,7 +50,7 @@ public class DalamudReleases
             dalamudTrack = mapping;
             Log.Information("Overriding channel {Track} Dalamud track with {NewTrack}", track, dalamudTrack);
         }
-
+        
         using var client = new HttpClient();
         return await client.GetFromJsonAsync<DalamudVersionInfo>(string.Format(URL_TEMPLATE, dalamudTrack));
     }
@@ -66,14 +66,13 @@ public class DalamudReleases
         var versionInfo = await this.GetVersionInfoForTrackAsync(track);
         if (versionInfo == null)
             throw new Exception("Could not get Dalamud version info");
-
+        
         var extractDir = this.ReleasesDir.CreateSubdirectory($"{track}-{versionInfo.AssemblyVersion}");
 
         if (extractDir.GetFiles().Length != 0)
             return extractDir;
-
-        Log.Information("Downloading Dalamud assembly for track {Track}({Version})", track,
-                        versionInfo.AssemblyVersion);
+        
+        Log.Information("Downloading Dalamud assembly for track {Track}({Version})", track, versionInfo.AssemblyVersion);
 
         using var client = new HttpClient();
         var zipBytes = await client.GetByteArrayAsync(versionInfo.DownloadUrl);
@@ -85,7 +84,7 @@ public class DalamudReleases
 
         return extractDir;
     }
-
+    
     private class DalamudVersionInfo
     {
 #pragma warning disable CS8618

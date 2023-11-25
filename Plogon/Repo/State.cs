@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-
 #pragma warning disable CS1591
 #pragma warning disable CS8618
 
@@ -22,14 +21,14 @@ public class State
         {
             this.Plugins = new Dictionary<string, PluginState>();
         }
-
+        
         public class PluginState
         {
             public PluginState()
             {
                 this.Changelogs = new Dictionary<string, PluginChangelog>();
             }
-
+            
             public string BuiltCommit { get; set; }
             public DateTime TimeBuilt { get; set; }
             public string EffectiveVersion { get; set; }
@@ -41,9 +40,9 @@ public class State
                 public string Changelog { get; set; }
             }
         }
-
+        
         public IDictionary<string, PluginState> Plugins { get; set; }
     }
-
+    
     public IDictionary<string, Channel> Channels { get; set; }
 }

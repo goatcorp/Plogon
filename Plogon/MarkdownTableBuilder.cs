@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-
 #pragma warning disable CS1591
 
 namespace Plogon;
@@ -28,13 +27,11 @@ public class MarkdownTableBuilder
 
     public override string ToString() => GetText();
 
-    public string GetText(bool noTable = false, bool discord = false)
-    {
+    public string GetText(bool noTable = false, bool discord = false) {
         if (rows.Count == 1 || noTable)
         {
             var text = rows.Aggregate(string.Empty,
-                                      (text, row) =>
-                                          text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
+                (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
 
             if (discord)
             {
@@ -54,19 +51,18 @@ public class MarkdownTableBuilder
 
             if (!string.IsNullOrWhiteSpace(text))
                 return text[..^1];
-
+            
             return string.Empty;
         }
-
+        
         var output = "|";
         foreach (var col in cols) output += $"{col}|";
         output += "\n|";
-
+        
         foreach (var col in cols) output += $"{new string('-', col.Length)}|";
         output += "\n";
 
-        foreach (var row in rows)
-        {
+        foreach (var row in rows) {
             output += "|";
             foreach (var col in row) output += $"{col}|";
             output += "\n";
