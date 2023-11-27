@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+
 using Serilog;
+
 using Tomlyn;
 #pragma warning disable CS1591
 
