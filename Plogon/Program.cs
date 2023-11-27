@@ -90,13 +90,8 @@ class Program
         }
 
         var secretsPk = Environment.GetEnvironmentVariable("PLOGON_SECRETS_PK");
-        if (string.IsNullOrEmpty(secretsPk))
-            throw new Exception("No secrets private key");
-        var secretsPkBytes = System.Text.Encoding.ASCII.GetBytes(secretsPk);
-
+        var secretsPkBytes = string.IsNullOrEmpty(secretsPk) ? null : System.Text.Encoding.ASCII.GetBytes(secretsPk);
         var secretsPkPassword = Environment.GetEnvironmentVariable("PLOGON_SECRETS_PK_PASSWORD");
-        if (string.IsNullOrEmpty(secretsPkPassword))
-            throw new Exception("No secrets private key password");
 
         var aborted = false;
         var numFailed = 0;
