@@ -1,4 +1,4 @@
-﻿namespace Plogon;
+namespace Plogon;
 
 /// <summary>
 /// Static values for Plogon.

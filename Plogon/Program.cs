@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -20,17 +20,17 @@ class Program
         /// No mode set.
         /// </summary>
         Unknown,
-        
+
         /// <summary>
         /// We are building a plugin for someone in a Pull Request.
         /// </summary>
         PullRequest,
-        
+
         /// <summary>
         /// We are building pending plugins to submit them to the repo.
         /// </summary>
         Commit,
-        
+
         /// <summary>
         /// We are running a continuous verification build for Dalamud.
         /// </summary>
@@ -68,7 +68,7 @@ class Program
         var repoOwner = repoParts?[0];
         var repoName = repoParts?[1];
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
-        
+
         if (mode == ModeOfOperation.PullRequest && string.IsNullOrEmpty(prNumber))
             throw new Exception("PR number not set");
 
@@ -140,7 +140,7 @@ class Program
                 // API8 release
                 setup.CutoffDate = new DateTime(2023, 06, 10);
             }
-            
+
             var buildProcessor = new BuildProcessor(setup);
             var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
 
