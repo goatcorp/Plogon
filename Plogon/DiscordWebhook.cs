@@ -19,9 +19,8 @@ public class DiscordWebhook
     /// <summary>
     /// Init with webhook from env var
     /// </summary>
-    public DiscordWebhook()
+    public DiscordWebhook(string? url)
     {
-        var url = Environment.GetEnvironmentVariable("DISCORD_WEBHOOK");
         if (string.IsNullOrEmpty(url))
             return;
 

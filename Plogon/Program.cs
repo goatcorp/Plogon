@@ -59,7 +59,8 @@ class Program
         if (mode == ModeOfOperation.Unknown)
             throw new Exception("No mode of operation specified.");
 
-        var webhook = new DiscordWebhook();
+        var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
+        var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_PAC_WEBHOOK"));
         var webservices = new WebServices();
 
         var githubSummary = "## Build Summary\n";
@@ -503,7 +504,7 @@ class Program
                             $": {nameTask.InternalName} [{nameTask.Channel}]{(numBuildTasks > 1 ? $" (+{numBuildTasks - 1})" : string.Empty)}";
 
                     var ok = !anyFailed && anyTried;
-                    var id = await webhook.Send(ok ? Color.Purple : Color.Red,
+                    var id = await publicChannelWebhook.Send(ok ? Color.Purple : Color.Red,
                         $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
                         hookTitle, ok ? "Accepted" : "Rejected");
                     await webservices.RegisterMessageId(prNumber!, id);
@@ -512,11 +513,14 @@ class Program
                         await gitHubApi.SetPrLabels(prNum, prLabels);
                 }
 
-                if (repoName != null && mode == ModeOfOperation.Commit && anyTried && webhook.Client != null)
+                if (repoName != null && mode == ModeOfOperation.Commit && anyTried && publicChannelWebhook.Client != null)
                 {
-                    await webhook.Send(!anyFailed ? Color.Green : Color.Red,
-                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})",
-                        "Builds committed", string.Empty);
+                    var committedText =
+                        $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})";
+                    var committedColor = !anyFailed ? Color.Green : Color.Red;
+                    var committedTitle = "Builds committed";
+                    await publicChannelWebhook.Send(committedColor, committedText, committedTitle, string.Empty);
+                    await pacChannelWebhook.Send(committedColor, committedText, committedTitle, string.Empty);
 
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
@@ -539,7 +543,7 @@ class Program
 
                             foreach (var id in msgIds)
                             {
-                                await webhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
+                                await publicChannelWebhook.Client.ModifyMessageAsync(ulong.Parse(id), properties =>
                                 {
                                     var embed = properties.Embeds.Value.First();
                                     var newEmbed = new EmbedBuilder()
