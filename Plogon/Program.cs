@@ -60,7 +60,7 @@ class Program
             throw new Exception("No mode of operation specified.");
 
         var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
-        var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_PAC_WEBHOOK"));
+        var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("PAC_DISCORD_WEBHOOK"));
         var webservices = new WebServices();
 
         var githubSummary = "## Build Summary\n";
