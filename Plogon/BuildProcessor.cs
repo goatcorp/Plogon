@@ -65,11 +65,20 @@ public class BuildProcessor
     // If a plugin breaks with a missing runtime package you might want to add the package here.
     private readonly Dictionary<string, string[]> RUNTIME_PACKAGES = new()
     {
+        { ".NETStandard,Version=v2.0", new[]
+            { "2.0.0" }
+        },
+        { "net5.0", new[]
+            { "5.0.0" }
+        },
         { "net6.0", new[]
             { "6.0.0", "6.0.11" }
         },
         { "net7.0", new[]
             { "7.0.0", "7.0.1" }
+        },
+        { "net8.0", new[]
+            { "8.0.0" }
         }
     };
 
@@ -347,7 +356,20 @@ public class BuildProcessor
         }
 
         // fetch runtime packages
-        await Task.WhenAll(runtimeDependencies.Select(dependency => GetDependency(dependency.Item1, new() { Resolved = dependency.Item2 }, pkgFolder, client)));
+        try
+        {
+            await Task.WhenAll(
+                runtimeDependencies.Select(
+                    dependency => GetDependency(
+                        dependency.Item1,
+                        new() { Resolved = dependency.Item2 },
+                        pkgFolder,
+                        client)));
+        }
+        catch (Exception e)
+        {
+            Log.Warning(e, "Failed to fetch runtime dependency");
+        }
     }
 
     async Task GetNeeds(BuildTask task, DirectoryInfo needs)
@@ -564,11 +586,13 @@ public class BuildProcessor
 
         foreach (var runtime in lockFileData.Runtimes)
         {
+            // e.g. net7.0, net7.0/linux-x64, net7.0-windows7.0
+            var key = runtime.Key.Split('/', '-')[0];
             // check if framework identifier also specifies a runtime identifier
-            var runtimeId = runtime.Key.Split('/').Skip(1).FirstOrDefault();
+            var runtimeId = runtime.Key.Split('/').ElementAtOrDefault(1);
 
             // add runtime packages to dependency list
-            if (!RUNTIME_PACKAGES.TryGetValue(runtime.Key[..6], out string[]? versions))
+            if (!RUNTIME_PACKAGES.TryGetValue(key, out string[]? versions))
             {
                 throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}");
             }
