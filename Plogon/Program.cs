@@ -14,8 +14,6 @@ namespace Plogon;
 
 class Program
 {
-    private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
-
     private enum ModeOfOperation
     {
         /// <summary>
@@ -248,7 +246,7 @@ class Program
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
 
                         if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) &&
-                                          AlwaysBuildUsers.All(x => x != actor)))
+                                          PlogonSystemDefine.PacMembers.All(x => x != actor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
@@ -448,9 +446,9 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var prNum = int.Parse(prNumber!);
+                    var parsedPrNum = int.Parse(prNumber!);
 
-                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
+                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(parsedPrNum);
 
                     var anyComments = true;
                     if (crossOutTask != null)
@@ -471,7 +469,7 @@ class Program
                             $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
 
-                    var commentTask = gitHubApi?.AddComment(prNum,
+                    var commentTask = gitHubApi?.AddComment(parsedPrNum,
                         commentText + mergeTimeText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
@@ -484,7 +482,7 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(prNum);
+                        var prDesc = await gitHubApi!.GetIssueBody(parsedPrNum);
                         if (!string.IsNullOrEmpty(prDesc))
                             buildInfo += $"```\n{prDesc}\n```\n";
                     }
@@ -510,7 +508,12 @@ class Program
                     await webservices.RegisterMessageId(prNumber!, id);
 
                     if (gitHubApi != null)
-                        await gitHubApi.SetPrLabels(prNum, prLabels);
+                        await gitHubApi.SetPrLabels(parsedPrNum, prLabels);
+
+                    if (prLabels.HasFlag(GitHubApi.PrLabel.NewPlugin) && gitHubApi != null)
+                    {
+                        await DoPacRoundRobinAssign(gitHubApi, parsedPrNum);
+                    }
                 }
 
                 if (repoName != null && mode == ModeOfOperation.Commit && anyTried && publicChannelWebhook.Client != null)
@@ -605,6 +608,51 @@ class Program
 
             if (aborted || anyFailed) Environment.Exit(1);
         }
+    }
+
+    private static async Task DoPacRoundRobinAssign(GitHubApi gitHubApi, int prNumber)
+    {
+        var thisPr = await gitHubApi.GetPullRequest(prNumber);
+
+        if (thisPr == null)
+        {
+            Log.Error("Could not get PR for round robin assign");
+            return;
+        }
+        
+        // Only go on if we don't have an assignee
+        if (thisPr.Assignees.Any())
+            return;
+
+        string? loginToAssign;
+        
+        // Find the last new plugin PR
+        var lastNewPluginPr = await gitHubApi.FindLastPrWithLabel(PlogonSystemDefine.PR_LABEL_NEW_PLUGIN);
+        if (lastNewPluginPr == null)
+        {
+            Log.Error("Could not find last new plugin PR for round robin assign");
+            loginToAssign = PlogonSystemDefine.PacMembers[0];
+        }
+        else
+        {
+            // Find the last assignee
+            var lastAssignee = lastNewPluginPr.Assignees.FirstOrDefault()?.Login;
+            if (lastAssignee == null)
+                loginToAssign = PlogonSystemDefine.PacMembers[0];
+            else
+            {
+                var lastAssigneeIndex = Array.IndexOf(PlogonSystemDefine.PacMembers, lastAssignee);
+                if (lastAssigneeIndex == -1)
+                    loginToAssign = PlogonSystemDefine.PacMembers[0];
+                else
+                {
+                    var nextAssigneeIndex = (lastAssigneeIndex + 1) % PlogonSystemDefine.PacMembers.Length;
+                    loginToAssign = PlogonSystemDefine.PacMembers[nextAssigneeIndex];
+                }
+            }
+        }
+        
+        await gitHubApi.Assign(prNumber, loginToAssign);
     }
 
     private static void SetupLogging()
