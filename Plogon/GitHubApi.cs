@@ -32,6 +32,21 @@ public class GitHubApi
             Credentials = new Credentials(token)
         };
     }
+    
+    /// <summary>
+    /// Authenticated GitHub client.
+    /// </summary>
+    public GitHubClient Client => this.ghClient;
+    
+    /// <summary>
+    /// Repo owner.
+    /// </summary>
+    public string RepoOwner => this.repoOwner;
+    
+    /// <summary>
+    /// Repo name.
+    /// </summary>
+    public string RepoName => this.repoName;
 
     /// <summary>
     /// Add comment to issue
@@ -109,17 +124,6 @@ public class GitHubApi
     public async Task<PullRequest?> GetPullRequest(int number)
     {
         return await this.ghClient.PullRequest.Get(repoOwner, repoName, number);
-    }
-    
-    /// <summary>
-    /// Find the last PR with the given label.
-    /// </summary>
-    /// <param name="labelName">The label.</param>
-    /// <returns>The PR.</returns>
-    public async Task<PullRequest?> FindLastPrWithLabel(string labelName)
-    {
-        var prs = await this.ghClient.PullRequest.GetAllForRepository(repoOwner, repoName);
-        return prs?.FirstOrDefault(x => x.Labels.Any(y => y.Name == labelName));
     }
     
     /// <summary>

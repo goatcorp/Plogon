@@ -627,7 +627,11 @@ class Program
         string? loginToAssign;
         
         // Find the last new plugin PR
-        var lastNewPluginPr = await gitHubApi.FindLastPrWithLabel(PlogonSystemDefine.PR_LABEL_NEW_PLUGIN);
+        var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
+        var lastNewPluginPr = prs?.FirstOrDefault(x => 
+                                                      x.Labels.Any(y => y.Name == PlogonSystemDefine.PR_LABEL_NEW_PLUGIN) &&
+                                                      x.Number != prNumber);
+
         if (lastNewPluginPr == null)
         {
             Log.Error("Could not find last new plugin PR for round robin assign");
