@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 using Discord;
+
+using Octokit;
 
 using Serilog;
 
@@ -627,12 +628,19 @@ class Program
         string? loginToAssign;
         
         // Find the last new plugin PR
-        var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
-        var lastNewPluginPr = prs?.OrderBy(x => x.Number)
-                                 .FirstOrDefault(x => 
-                                                     x.Labels.Any(y => y.Name == PlogonSystemDefine.PR_LABEL_NEW_PLUGIN) && 
-                                                     x.Number != prNumber);
-
+        //var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
+        var result = await gitHubApi.Client.Search.SearchIssues(
+                      new SearchIssuesRequest
+                      {
+                          Repos = new RepositoryCollection()
+                          {
+                              { gitHubApi.RepoOwner, gitHubApi.RepoName },
+                          },
+                          Is = new [] { IssueIsQualifier.PullRequest },
+                          Labels = new []{ PlogonSystemDefine.PR_LABEL_NEW_PLUGIN },
+                          SortField = IssueSearchSort.Created,
+                      });
+        var lastNewPluginPr = result?.Items.FirstOrDefault(x => x.Number != prNumber);
         if (lastNewPluginPr == null)
         {
             Log.Error("Could not find last new plugin PR for round robin assign");
