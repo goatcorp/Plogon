@@ -628,9 +628,10 @@ class Program
         
         // Find the last new plugin PR
         var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
-        var lastNewPluginPr = prs?.FirstOrDefault(x => 
-                                                      x.Labels.Any(y => y.Name == PlogonSystemDefine.PR_LABEL_NEW_PLUGIN) &&
-                                                      x.Number != prNumber);
+        var lastNewPluginPr = prs?.OrderBy(x => x.Number)
+                                 .FirstOrDefault(x => 
+                                                     x.Labels.Any(y => y.Name == PlogonSystemDefine.PR_LABEL_NEW_PLUGIN) && 
+                                                     x.Number != prNumber);
 
         if (lastNewPluginPr == null)
         {
