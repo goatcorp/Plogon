@@ -435,7 +435,9 @@ public class BuildProcessor
         switch (host.Host)
         {
             case "github.com":
-                result.DiffUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
+                // GitHub does not support diffing from 0
+                if (haveCommit != emptyTree)
+                    result.DiffUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
                 break;
             case "gitlab.com":
                 result.DiffUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
