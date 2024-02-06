@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -752,6 +753,7 @@ public class BuildProcessor
 
         var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
         var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
+        var archive = this.workFolder.CreateSubdirectory($"{folderName}-archive");
         var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
         var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
         var needs = this.workFolder.CreateSubdirectory($"{folderName}-needs");
@@ -769,18 +771,22 @@ public class BuildProcessor
 
         if (task.Manifest.Plugin.ProjectPath.Contains(".."))
             throw new Exception("Not allowed");
-
-        if (!work.Exists || work.GetFiles().Length == 0)
+        
+        // Always clone fresh
+        if (work.Exists)
         {
-            Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
-            {
-                Checkout = false,
-                RecurseSubmodules = false,
-            });
+            work.Delete(true);
+            work.Create();
         }
 
+        Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
+        {
+            Checkout = false,
+            RecurseSubmodules = false,
+        });
+
         var repo = new Repository(work.FullName);
-        Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
+        Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
@@ -796,6 +802,14 @@ public class BuildProcessor
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
+        // Archive source code before build
+        CopySourceForArchive(work, archive);
+        
+        // Create archive zip
+        var archiveZipFile =
+            new FileInfo(Path.Combine(this.workFolder.FullName, $"{archive.Name}.zip"));
+        ZipFile.CreateFromDirectory(archive.FullName, archiveZipFile.FullName);
+        
         var diff = await GetPluginDiff(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
@@ -978,6 +992,8 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
+                    archiveZipFile.CopyTo(Path.Combine(repoOutputDir.FullName, "archive.zip"), true);
+
                     if (task.Manifest.Directory == null)
                         throw new Exception("Manifest had no directory set");
 
@@ -1017,6 +1033,26 @@ public class BuildProcessor
         }
 
         return new BuildResult(exitCode == 0, diff, version, task);
+    }
+    
+    private static void CopySourceForArchive(DirectoryInfo from, DirectoryInfo to, int depth = 0)
+    {
+        if (!to.Exists)
+            to.Create();
+
+        foreach (var file in from.GetFiles())
+        {
+            file.CopyTo(Path.Combine(to.FullName, file.Name), true);
+        }
+
+        foreach (var dir in from.GetDirectories())
+        {
+            // Skip root-level .git
+            if (depth == 0 && dir.Name == ".git")
+                continue;
+            
+            CopySourceForArchive(dir, to.CreateSubdirectory(dir.Name), depth + 1);
+        }
     }
 
     /// <summary>
