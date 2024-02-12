@@ -30,6 +30,8 @@ using Plogon.Repo;
 
 using Serilog;
 
+using Tag = Amazon.S3.Model.Tag;
+
 namespace Plogon;
 
 /// <summary>
@@ -1038,6 +1040,29 @@ public class BuildProcessor
                                 BucketName = S3_BUCKET_NAME,
                                 Key = key,
                                 FilePath = archiveZipFile.FullName,
+                                TagSet =
+                                {
+                                    new Tag
+                                    {
+                                        Key = "AssemblyVersion",
+                                        Value = version
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "Commit",
+                                        Value = task.Manifest.Plugin.Commit
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "Channel",
+                                        Value = task.Channel
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "InternalName",
+                                        Value = task.InternalName
+                                    }
+                                }
                             });
                         
                             if (result.HttpStatusCode != HttpStatusCode.OK)
