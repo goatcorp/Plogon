@@ -4,12 +4,16 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+
+using Amazon.S3;
+using Amazon.S3.Model;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -44,6 +48,8 @@ public class BuildProcessor
 
     private readonly DockerClient dockerClient;
 
+    private readonly IAmazonS3? s3Client;
+
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
@@ -76,6 +82,8 @@ public class BuildProcessor
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
 
+    private const string S3_BUCKET_NAME = "plogon";
+    
     /// <summary>
     /// Parameters for build processor.
     /// </summary>
@@ -135,6 +143,11 @@ public class BuildProcessor
         /// Diff in unified format that contains the changes requested by the PR we are running as
         /// </summary>
         public string? PrDiff { get; set; }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        public IAmazonS3? S3Client { get; set; }
     }
 
     /// <summary>
@@ -156,6 +169,8 @@ public class BuildProcessor
         this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
+
+        this.s3Client = setup.S3Client;
     }
 
     /// <summary>
@@ -992,8 +1007,27 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
-                    archiveZipFile.CopyTo(Path.Combine(repoOutputDir.FullName, "archive.zip"), true);
-
+                    if (this.s3Client != null)
+                    {
+                        var key =
+                            $"sources/{task.Channel}/{task.InternalName}/{task.Manifest.Plugin.Commit}/archive.zip";
+                        var result = await this.s3Client.PutObjectAsync(new PutObjectRequest
+                        {
+                            BucketName = S3_BUCKET_NAME,
+                            Key = key,
+                            FilePath = archiveZipFile.FullName,
+                        });
+                        
+                        if (result.HttpStatusCode == HttpStatusCode.OK)
+                            throw new Exception($"Failed to upload archive to S3(code: {result.HttpStatusCode})");
+                        
+                        Log.Information("Uploaded archive to S3: {Key} - {ETag}", key, result.ETag);
+                    }
+                    else
+                    {
+                        Log.Warning("No S3 client, not uploading archive");
+                    }
+                    
                     if (task.Manifest.Directory == null)
                         throw new Exception("Manifest had no directory set");
 

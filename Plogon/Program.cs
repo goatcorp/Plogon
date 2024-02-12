@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Amazon.S3;
+
 using Discord;
 
 using Octokit;
@@ -57,6 +59,17 @@ class Program
 
         if (mode == ModeOfOperation.Unknown)
             throw new Exception("No mode of operation specified.");
+
+        var s3AccessKey = Environment.GetEnvironmentVariable("PLOGON_S3_ACCESSKEY");
+        var s3Secret = Environment.GetEnvironmentVariable("PLOGON_S3_SECRET");
+        var s3Region = Environment.GetEnvironmentVariable("PLOGON_S3_REGION");
+
+        IAmazonS3? s3Client = null;
+        if (s3AccessKey != null && s3Secret != null && s3Region != null)
+        {
+            var s3Creds = new Amazon.Runtime.BasicAWSCredentials(s3AccessKey, s3Secret);
+            s3Client = new AmazonS3Client(s3Creds, Amazon.RegionEndpoint.GetBySystemName(s3Region));
+        }
 
         var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
         var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("PAC_DISCORD_WEBHOOK"));
@@ -132,6 +145,7 @@ class Program
                 PrDiff = prDiff,
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
+                S3Client = s3Client,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...

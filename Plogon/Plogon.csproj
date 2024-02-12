@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="AWSSDK.S3" Version="3.7.305.24" />
       <PackageReference Include="Docker.DotNet" Version="3.125.5" />
       <PackageReference Include="LibGit2Sharp" Version="0.27.0-preview-0182" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
