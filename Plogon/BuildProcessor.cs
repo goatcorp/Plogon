@@ -82,7 +82,7 @@ public class BuildProcessor
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
 
-    private const string S3_BUCKET_NAME = "plogon";
+    private const string S3_BUCKET_NAME = "dalamud-plugin-archive";
     
     /// <summary>
     /// Parameters for build processor.
