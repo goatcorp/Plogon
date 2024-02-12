@@ -1011,17 +1011,44 @@ public class BuildProcessor
                     {
                         var key =
                             $"sources/{task.Channel}/{task.InternalName}/{task.Manifest.Plugin.Commit}/archive.zip";
-                        var result = await this.s3Client.PutObjectAsync(new PutObjectRequest
+                        
+                        // Check if exist
+                        bool mustUpload;
+                        try
                         {
-                            BucketName = S3_BUCKET_NAME,
-                            Key = key,
-                            FilePath = archiveZipFile.FullName,
-                        });
+                            await this.s3Client.GetObjectMetadataAsync(S3_BUCKET_NAME, key);
+                            mustUpload = false;
+                        }
+                        catch (AmazonS3Exception exception)
+                        {
+                            if (exception.StatusCode == HttpStatusCode.NotFound)
+                            {
+                                mustUpload = true;
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
+
+                        if (mustUpload)
+                        {
+                            var result = await this.s3Client.PutObjectAsync(new PutObjectRequest
+                            {
+                                BucketName = S3_BUCKET_NAME,
+                                Key = key,
+                                FilePath = archiveZipFile.FullName,
+                            });
                         
-                        if (result.HttpStatusCode == HttpStatusCode.OK)
-                            throw new Exception($"Failed to upload archive to S3(code: {result.HttpStatusCode})");
+                            if (result.HttpStatusCode != HttpStatusCode.OK)
+                                throw new Exception($"Failed to upload archive to S3(code: {result.HttpStatusCode})");
                         
-                        Log.Information("Uploaded archive to S3: {Key} - {ETag}", key, result.ETag);
+                            Log.Information("Uploaded archive to S3: {Key} - {ETag}", key, result.ETag);
+                        }
+                        else
+                        {
+                            Log.Warning("Archive already exists on S3, not uploading (key: {Key})", key);
+                        }
                     }
                     else
                     {
