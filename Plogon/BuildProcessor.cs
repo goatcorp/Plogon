@@ -1012,7 +1012,7 @@ public class BuildProcessor
                     if (this.s3Client != null)
                     {
                         var key =
-                            $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}/archive.zip";
+                            $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}.zip";
                         
                         // Check if exist
                         bool mustUpload;
