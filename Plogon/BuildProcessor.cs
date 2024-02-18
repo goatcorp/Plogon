@@ -768,12 +768,13 @@ public class BuildProcessor
 
         ParanoiaValidateTask(task);
 
-        var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
-        var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
-        var archive = this.workFolder.CreateSubdirectory($"{folderName}-archive");
-        var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
-        var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
-        var needs = this.workFolder.CreateSubdirectory($"{folderName}-needs");
+        var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
+        var taskRoot = this.workFolder.CreateSubdirectory(taskFolderName);
+        var work = taskRoot.CreateSubdirectory("work");
+        var archive = taskRoot.CreateSubdirectory("archive");
+        var output = taskRoot.CreateSubdirectory("output");
+        var packages = taskRoot.CreateSubdirectory("packages");
+        var needs = taskRoot.CreateSubdirectory("needs");
 
         Debug.Assert(staticFolder.Exists);
 
@@ -1118,6 +1119,16 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
 
+        try
+        {
+            // Cleanup work folder to save storage space on actions
+            work.Delete(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Could not cleanup workspace");
+        }
+        
         return new BuildResult(exitCode == 0, diff, version, task);
     }
     
