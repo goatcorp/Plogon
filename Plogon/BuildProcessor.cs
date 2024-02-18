@@ -770,6 +770,7 @@ public class BuildProcessor
 
         var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
         var taskRoot = this.workFolder.CreateSubdirectory(taskFolderName);
+        Log.Verbose("taskRoot: {TaskRoot}", taskRoot.FullName);
         var work = taskRoot.CreateSubdirectory("work");
         var archive = taskRoot.CreateSubdirectory("archive");
         var output = taskRoot.CreateSubdirectory("output");
@@ -825,7 +826,7 @@ public class BuildProcessor
         
         // Create archive zip
         var archiveZipFile =
-            new FileInfo(Path.Combine(this.workFolder.FullName, $"{archive.Name}.zip"));
+            new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archive.Name}.zip"));
         ZipFile.CreateFromDirectory(archive.FullName, archiveZipFile.FullName);
         
         var diff = await GetPluginDiff(work, task, otherTasks);
@@ -1123,6 +1124,7 @@ public class BuildProcessor
         {
             // Cleanup work folder to save storage space on actions
             work.Delete(true);
+            archiveZipFile.Delete();
         }
         catch (Exception ex)
         {
