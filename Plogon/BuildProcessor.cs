@@ -1010,7 +1010,7 @@ public class BuildProcessor
                     if (this.s3Client != null)
                     {
                         var key =
-                            $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}/archive.zip";
+                            $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}.zip";
                         
                         // Check if exist
                         bool mustUpload;
@@ -1042,22 +1042,22 @@ public class BuildProcessor
                                 {
                                     new Tag
                                     {
-                                        Key = "AssemblyVersion",
+                                        Key = "dev.dalamud.plugin/Version",
                                         Value = version
                                     },
                                     new Tag
                                     {
-                                        Key = "Commit",
+                                        Key = "dev.dalamud.plugin/CommitHash",
                                         Value = task.Manifest.Plugin.Commit
                                     },
                                     new Tag
                                     {
-                                        Key = "Channel",
+                                        Key = "dev.dalamud.plugin/DistributionChannel",
                                         Value = task.Channel
                                     },
                                     new Tag
                                     {
-                                        Key = "InternalName",
+                                        Key = "dev.dalamud.plugin/InternalName",
                                         Value = task.InternalName
                                     }
                                 }
