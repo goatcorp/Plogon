@@ -812,14 +812,7 @@ public class BuildProcessor
         {
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
-
-        foreach (var submodule in repo.Submodules)
-        {
-            repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
-            {
-                Init = true,
-            });
-        }
+        HandleSubmodules(repo);
 
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
@@ -1154,6 +1147,21 @@ public class BuildProcessor
                 continue;
             
             CopySourceForArchive(dir, to.CreateSubdirectory(dir.Name), depth + 1);
+        }
+    }
+
+    private static void HandleSubmodules(Repository repo)
+    {
+        foreach (var submodule in repo.Submodules)
+        {
+            repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
+            {
+                Init = true,
+            });
+
+            // In the case of recursive submodules
+            var submoduleRepo = new Repository(Path.Combine(repo.Info.WorkingDirectory, submodule.Path));
+            HandleSubmodules(submoduleRepo);
         }
     }
 
