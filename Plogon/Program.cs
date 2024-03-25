@@ -38,6 +38,11 @@ class Program
         /// We are running a continuous verification build for Dalamud.
         /// </summary>
         Continuous,
+
+        /// <summary>
+        /// We are building a plugin in dev mode to validate Plogon itself.
+        /// </summary>
+        Development,
     }
 
     /// <summary>
@@ -634,13 +639,13 @@ class Program
             Log.Error("Could not get PR for round robin assign");
             return;
         }
-        
+
         // Only go on if we don't have an assignee
         if (thisPr.Assignees.Any())
             return;
 
         string? loginToAssign;
-        
+
         // Find the last new plugin PR
         //var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
         var result = await gitHubApi.Client.Search.SearchIssues(
@@ -650,8 +655,8 @@ class Program
                           {
                               { gitHubApi.RepoOwner, gitHubApi.RepoName },
                           },
-                          Is = new [] { IssueIsQualifier.PullRequest },
-                          Labels = new []{ PlogonSystemDefine.PR_LABEL_NEW_PLUGIN },
+                          Is = new[] { IssueIsQualifier.PullRequest },
+                          Labels = new[] { PlogonSystemDefine.PR_LABEL_NEW_PLUGIN },
                           SortField = IssueSearchSort.Created,
                       });
         var lastNewPluginPr = result?.Items.FirstOrDefault(x => x.Number != prNumber);
@@ -678,7 +683,7 @@ class Program
                 }
             }
         }
-        
+
         await gitHubApi.Assign(prNumber, loginToAssign);
     }
 
