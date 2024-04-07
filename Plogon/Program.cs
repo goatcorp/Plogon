@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
+using Amazon.S3;
+
 using Discord;
+
+using Octokit;
 
 using Serilog;
 
@@ -14,8 +17,6 @@ namespace Plogon;
 
 class Program
 {
-    private static readonly string[] AlwaysBuildUsers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
-
     private enum ModeOfOperation
     {
         /// <summary>
@@ -37,6 +38,11 @@ class Program
         /// We are running a continuous verification build for Dalamud.
         /// </summary>
         Continuous,
+
+        /// <summary>
+        /// We are building a plugin in dev mode to validate Plogon itself.
+        /// </summary>
+        Development,
     }
 
     /// <summary>
@@ -58,6 +64,17 @@ class Program
 
         if (mode == ModeOfOperation.Unknown)
             throw new Exception("No mode of operation specified.");
+
+        var s3AccessKey = Environment.GetEnvironmentVariable("PLOGON_S3_ACCESSKEY");
+        var s3Secret = Environment.GetEnvironmentVariable("PLOGON_S3_SECRET");
+        var s3Region = Environment.GetEnvironmentVariable("PLOGON_S3_REGION");
+
+        IAmazonS3? s3Client = null;
+        if (s3AccessKey != null && s3Secret != null && s3Region != null)
+        {
+            var s3Creds = new Amazon.Runtime.BasicAWSCredentials(s3AccessKey, s3Secret);
+            s3Client = new AmazonS3Client(s3Creds, Amazon.RegionEndpoint.GetBySystemName(s3Region));
+        }
 
         var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
         var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("PAC_DISCORD_WEBHOOK"));
@@ -133,6 +150,7 @@ class Program
                 PrDiff = prDiff,
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
+                S3Client = s3Client,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
@@ -248,7 +266,7 @@ class Program
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
 
                         if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) &&
-                                          AlwaysBuildUsers.All(x => x != actor)))
+                                          PlogonSystemDefine.PacMembers.All(x => x != actor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
@@ -448,9 +466,9 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var prNum = int.Parse(prNumber!);
+                    var parsedPrNum = int.Parse(prNumber!);
 
-                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNum);
+                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(parsedPrNum);
 
                     var anyComments = true;
                     if (crossOutTask != null)
@@ -471,7 +489,7 @@ class Program
                             $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
 
-                    var commentTask = gitHubApi?.AddComment(prNum,
+                    var commentTask = gitHubApi?.AddComment(parsedPrNum,
                         commentText + mergeTimeText + "\n\n" + buildsMd + "\n##### " + links);
 
                     if (commentTask != null)
@@ -484,7 +502,7 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(prNum);
+                        var prDesc = await gitHubApi!.GetIssueBody(parsedPrNum);
                         if (!string.IsNullOrEmpty(prDesc))
                             buildInfo += $"```\n{prDesc}\n```\n";
                     }
@@ -510,7 +528,12 @@ class Program
                     await webservices.RegisterMessageId(prNumber!, id);
 
                     if (gitHubApi != null)
-                        await gitHubApi.SetPrLabels(prNum, prLabels);
+                        await gitHubApi.SetPrLabels(parsedPrNum, prLabels);
+
+                    if (prLabels.HasFlag(GitHubApi.PrLabel.NewPlugin) && gitHubApi != null)
+                    {
+                        await DoPacRoundRobinAssign(gitHubApi, parsedPrNum);
+                    }
                 }
 
                 if (repoName != null && mode == ModeOfOperation.Commit && anyTried && publicChannelWebhook.Client != null)
@@ -605,6 +628,63 @@ class Program
 
             if (aborted || anyFailed) Environment.Exit(1);
         }
+    }
+
+    private static async Task DoPacRoundRobinAssign(GitHubApi gitHubApi, int prNumber)
+    {
+        var thisPr = await gitHubApi.GetPullRequest(prNumber);
+
+        if (thisPr == null)
+        {
+            Log.Error("Could not get PR for round robin assign");
+            return;
+        }
+
+        // Only go on if we don't have an assignee
+        if (thisPr.Assignees.Any())
+            return;
+
+        string? loginToAssign;
+
+        // Find the last new plugin PR
+        //var prs = await gitHubApi.Client.PullRequest.GetAllForRepository(gitHubApi.RepoOwner, gitHubApi.RepoName);
+        var result = await gitHubApi.Client.Search.SearchIssues(
+                      new SearchIssuesRequest
+                      {
+                          Repos = new RepositoryCollection()
+                          {
+                              { gitHubApi.RepoOwner, gitHubApi.RepoName },
+                          },
+                          Is = new[] { IssueIsQualifier.PullRequest },
+                          Labels = new[] { PlogonSystemDefine.PR_LABEL_NEW_PLUGIN },
+                          SortField = IssueSearchSort.Created,
+                      });
+        var lastNewPluginPr = result?.Items.FirstOrDefault(x => x.Number != prNumber);
+        if (lastNewPluginPr == null)
+        {
+            Log.Error("Could not find last new plugin PR for round robin assign");
+            loginToAssign = PlogonSystemDefine.PacMembers[0];
+        }
+        else
+        {
+            // Find the last assignee
+            var lastAssignee = lastNewPluginPr.Assignees.FirstOrDefault()?.Login;
+            if (lastAssignee == null)
+                loginToAssign = PlogonSystemDefine.PacMembers[0];
+            else
+            {
+                var lastAssigneeIndex = Array.IndexOf(PlogonSystemDefine.PacMembers, lastAssignee);
+                if (lastAssigneeIndex == -1)
+                    loginToAssign = PlogonSystemDefine.PacMembers[0];
+                else
+                {
+                    var nextAssigneeIndex = (lastAssigneeIndex + 1) % PlogonSystemDefine.PacMembers.Length;
+                    loginToAssign = PlogonSystemDefine.PacMembers[nextAssigneeIndex];
+                }
+            }
+        }
+
+        await gitHubApi.Assign(prNumber, loginToAssign);
     }
 
     private static void SetupLogging()

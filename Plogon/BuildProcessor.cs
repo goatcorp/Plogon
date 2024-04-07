@@ -2,13 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+
+using Amazon.S3;
+using Amazon.S3.Model;
 
 using Docker.DotNet;
 using Docker.DotNet.Models;
@@ -24,6 +29,8 @@ using Plogon.Manifests;
 using Plogon.Repo;
 
 using Serilog;
+
+using Tag = Amazon.S3.Model.Tag;
 
 namespace Plogon;
 
@@ -43,6 +50,8 @@ public class BuildProcessor
 
     private readonly DockerClient dockerClient;
 
+    private readonly IAmazonS3? s3Client;
+
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
@@ -59,7 +68,7 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "7.0.100";
+    private const string DOCKER_TAG = "8.0";
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
     // If a plugin breaks with a missing runtime package you might want to add the package here.
@@ -75,7 +84,7 @@ public class BuildProcessor
             { "6.0.0", "6.0.11" }
         },
         { "net7.0", new[]
-            { "7.0.0", "7.0.1" }
+            { "7.0.0", "7.0.1", "7.0.14", "7.0.15" }
         },
         { "net8.0", new[]
             { "8.0.0" }
@@ -84,6 +93,8 @@ public class BuildProcessor
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
 
+    private const string S3_BUCKET_NAME = "dalamud-plugin-archive";
+    
     /// <summary>
     /// Parameters for build processor.
     /// </summary>
@@ -143,6 +154,11 @@ public class BuildProcessor
         /// Diff in unified format that contains the changes requested by the PR we are running as
         /// </summary>
         public string? PrDiff { get; set; }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        public IAmazonS3? S3Client { get; set; }
     }
 
     /// <summary>
@@ -164,6 +180,8 @@ public class BuildProcessor
         this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
+
+        this.s3Client = setup.S3Client;
     }
 
     /// <summary>
@@ -457,7 +475,9 @@ public class BuildProcessor
         switch (host.Host)
         {
             case "github.com":
-                result.DiffUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
+                // GitHub does not support diffing from 0
+                if (haveCommit != emptyTree)
+                    result.DiffUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
                 break;
             case "gitlab.com":
                 result.DiffUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
@@ -772,11 +792,14 @@ public class BuildProcessor
 
         ParanoiaValidateTask(task);
 
-        var folderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}";
-        var work = this.workFolder.CreateSubdirectory($"{folderName}-work");
-        var output = this.workFolder.CreateSubdirectory($"{folderName}-output");
-        var packages = this.workFolder.CreateSubdirectory($"{folderName}-packages");
-        var needs = this.workFolder.CreateSubdirectory($"{folderName}-needs");
+        var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
+        var taskRoot = this.workFolder.CreateSubdirectory(taskFolderName);
+        Log.Verbose("taskRoot: {TaskRoot}", taskRoot.FullName);
+        var work = taskRoot.CreateSubdirectory("work");
+        var archive = taskRoot.CreateSubdirectory("archive");
+        var output = taskRoot.CreateSubdirectory("output");
+        var packages = taskRoot.CreateSubdirectory("packages");
+        var needs = taskRoot.CreateSubdirectory("needs");
 
         Debug.Assert(staticFolder.Exists);
 
@@ -791,33 +814,38 @@ public class BuildProcessor
 
         if (task.Manifest.Plugin.ProjectPath.Contains(".."))
             throw new Exception("Not allowed");
-
-        if (!work.Exists || work.GetFiles().Length == 0)
+        
+        // Always clone fresh
+        if (work.Exists)
         {
-            Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
-            {
-                Checkout = false,
-                RecurseSubmodules = false,
-            });
+            work.Delete(true);
+            work.Create();
         }
 
+        Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
+        {
+            Checkout = false,
+            RecurseSubmodules = false,
+        });
+
         var repo = new Repository(work.FullName);
-        Commands.Fetch(repo, "origin", new string[] { task.Manifest.Plugin.Commit }, new FetchOptions
+        Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
-
-        foreach (var submodule in repo.Submodules)
-        {
-            repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
-            {
-                Init = true,
-            });
-        }
+        HandleSubmodules(repo);
 
         if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
+        // Archive source code before build
+        CopySourceForArchive(work, archive);
+        
+        // Create archive zip
+        var archiveZipFile =
+            new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archive.Name}.zip"));
+        ZipFile.CreateFromDirectory(archive.FullName, archiveZipFile.FullName);
+        
         var diff = await GetPluginDiff(work, task, otherTasks);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
@@ -1000,6 +1028,77 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
+                    if (this.s3Client != null)
+                    {
+                        var key =
+                            $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}.zip";
+                        
+                        // Check if exist
+                        bool mustUpload;
+                        try
+                        {
+                            await this.s3Client.GetObjectMetadataAsync(S3_BUCKET_NAME, key);
+                            mustUpload = false;
+                        }
+                        catch (AmazonS3Exception exception)
+                        {
+                            if (exception.StatusCode == HttpStatusCode.NotFound)
+                            {
+                                mustUpload = true;
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
+
+                        if (mustUpload)
+                        {
+                            var result = await this.s3Client.PutObjectAsync(new PutObjectRequest
+                            {
+                                BucketName = S3_BUCKET_NAME,
+                                Key = key,
+                                FilePath = archiveZipFile.FullName,
+                                TagSet =
+                                {
+                                    new Tag
+                                    {
+                                        Key = "dev.dalamud.plugin/Version",
+                                        Value = version
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "dev.dalamud.plugin/CommitHash",
+                                        Value = task.Manifest.Plugin.Commit
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "dev.dalamud.plugin/DistributionChannel",
+                                        Value = task.Channel
+                                    },
+                                    new Tag
+                                    {
+                                        Key = "dev.dalamud.plugin/InternalName",
+                                        Value = task.InternalName
+                                    }
+                                }
+                            });
+                        
+                            if (result.HttpStatusCode != HttpStatusCode.OK)
+                                throw new Exception($"Failed to upload archive to S3(code: {result.HttpStatusCode})");
+                        
+                            Log.Information("Uploaded archive to S3: {Key} - {ETag}", key, result.ETag);
+                        }
+                        else
+                        {
+                            Log.Warning("Archive already exists on S3, not uploading (key: {Key})", key);
+                        }
+                    }
+                    else
+                    {
+                        Log.Warning("No S3 client, not uploading archive");
+                    }
+                    
                     if (task.Manifest.Directory == null)
                         throw new Exception("Manifest had no directory set");
 
@@ -1038,7 +1137,53 @@ public class BuildProcessor
             throw new Exception("DalamudPackager output not found, make sure it is installed");
         }
 
+        try
+        {
+            // Cleanup work folder to save storage space on actions
+            work.Delete(true);
+            archiveZipFile.Delete();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Could not cleanup workspace");
+        }
+        
         return new BuildResult(exitCode == 0, diff, version, task);
+    }
+    
+    private static void CopySourceForArchive(DirectoryInfo from, DirectoryInfo to, int depth = 0)
+    {
+        if (!to.Exists)
+            to.Create();
+
+        foreach (var file in from.GetFiles())
+        {
+            file.CopyTo(Path.Combine(to.FullName, file.Name), true);
+        }
+
+        foreach (var dir in from.GetDirectories())
+        {
+            // Skip root-level .git
+            if (depth == 0 && dir.Name == ".git")
+                continue;
+            
+            CopySourceForArchive(dir, to.CreateSubdirectory(dir.Name), depth + 1);
+        }
+    }
+
+    private static void HandleSubmodules(Repository repo)
+    {
+        foreach (var submodule in repo.Submodules)
+        {
+            repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
+            {
+                Init = true,
+            });
+
+            // In the case of recursive submodules
+            var submoduleRepo = new Repository(Path.Combine(repo.Info.WorkingDirectory, submodule.Path));
+            HandleSubmodules(submoduleRepo);
+        }
     }
 
     /// <summary>
