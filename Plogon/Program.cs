@@ -136,7 +136,6 @@ class Program
                 Log.Error("Diff for PR is not available, this might lead to unnecessary builds being performed.");
             }
 
-            buildOverridesFile ??= new FileInfo(Path.Combine(manifestFolder.FullName, "overrides.toml"));
             var setup = new BuildProcessor.BuildProcessorSetup
             {
                 RepoFolder = outputFolder,
