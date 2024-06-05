@@ -608,6 +608,7 @@ class Program
         catch (Exception ex)
         {
             Log.Error(ex, "Failed during init");
+            aborted = true;
         }
         finally
         {
