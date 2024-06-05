@@ -128,7 +128,7 @@ public class BuildProcessor
         /// <summary>
         /// Path to file containing overrides for the Dalamud version used.
         /// </summary>
-        public FileInfo BuildOverridesFile { get; set; }
+        public FileInfo? BuildOverridesFile { get; set; }
 
         /// <summary>
         /// Whether or not non-default build images are allowed.

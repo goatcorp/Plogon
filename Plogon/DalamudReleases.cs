@@ -31,11 +31,11 @@ public class DalamudReleases
     /// </summary>
     /// <param name="overridesFile">File containing overrides.</param>
     /// <param name="releasesDir">Where releases should go</param>
-    public DalamudReleases(FileInfo overridesFile, DirectoryInfo releasesDir)
+    public DalamudReleases(FileInfo? overridesFile, DirectoryInfo releasesDir)
     {
         this.ReleasesDir = releasesDir;
 
-        if (overridesFile.Exists)
+        if (overridesFile?.Exists ?? false)
             this.overrides = Toml.ToModel<Overrides>(overridesFile.OpenText().ReadToEnd());
     }
 
