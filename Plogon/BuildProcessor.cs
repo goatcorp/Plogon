@@ -776,6 +776,13 @@ public class BuildProcessor
         return decrypted;
     }
 
+    private static void WriteNugetConfig(FileInfo output)
+    {
+        var nugetConfigText =
+            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n    <clear />\n    <add key=\"plogon\" value=\"/packages\" />\n  </packageSources>\n</configuration>";
+        File.WriteAllText(output.FullName, nugetConfigText);
+    }
+
     /// <summary>
     /// Check out and build a plugin from a task
     /// </summary>
@@ -867,6 +874,8 @@ public class BuildProcessor
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
+        WriteNugetConfig(new FileInfo(Path.Combine(work.FullName, "nuget.config")));
+        
         await RetryUntil(async () => await GetNeeds(task, needs));
         await RetryUntil(async () => await RestoreAllPackages(task, work, packages));
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
