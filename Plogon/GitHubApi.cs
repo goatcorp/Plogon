@@ -32,17 +32,17 @@ public class GitHubApi
             Credentials = new Credentials(token)
         };
     }
-    
+
     /// <summary>
     /// Authenticated GitHub client.
     /// </summary>
     public GitHubClient Client => this.ghClient;
-    
+
     /// <summary>
     /// Repo owner.
     /// </summary>
     public string RepoOwner => this.repoOwner;
-    
+
     /// <summary>
     /// Repo name.
     /// </summary>
@@ -55,7 +55,14 @@ public class GitHubApi
     /// <param name="body">The body</param>
     public async Task AddComment(int issueNumber, string body)
     {
-        await this.ghClient.Issue.Comment.Create(repoOwner, repoName, issueNumber, body);
+        try
+        {
+            await this.ghClient.Issue.Comment.Create(repoOwner, repoName, issueNumber, body);
+        }
+        catch (OverflowException)
+        {
+            // Explicitly ignored (octokit/octokit.net#2927)
+        }
     }
 
     /// <summary>
@@ -125,7 +132,7 @@ public class GitHubApi
     {
         return await this.ghClient.PullRequest.Get(repoOwner, repoName, number);
     }
-    
+
     /// <summary>
     /// Add an assignee.
     /// </summary>
@@ -133,7 +140,7 @@ public class GitHubApi
     /// <param name="assignee">GitHub login to assign.</param>
     public async Task Assign(int number, string assignee)
     {
-        await this.ghClient.Issue.Assignee.AddAssignees(repoOwner, repoName, number, new AssigneesUpdate(new []{ assignee }));
+        await this.ghClient.Issue.Assignee.AddAssignees(repoOwner, repoName, number, new AssigneesUpdate(new[] { assignee }));
     }
 
     /// <summary>
