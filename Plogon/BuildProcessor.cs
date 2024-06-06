@@ -69,6 +69,7 @@ public class BuildProcessor
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "8.0";
+
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
     // If a plugin breaks with a missing runtime package you might want to add the package here.
@@ -89,6 +90,17 @@ public class BuildProcessor
         { "net8.0", new[]
             { "8.0.0" }
         }
+    };
+
+    // This field specifies a list of packages that must be present in the package cache, no matter
+    // whether they are present in the lockfile. This is necessary for SDK packages, as they are not
+    // added to lockfiles.
+    private readonly Dictionary<string, string[]> FORCE_PACKAGES = new()
+    {
+        { "Dalamud.NET.Sdk", new[]
+            // This should have all of the SDK packages we still support.
+            { "9.0.1" }
+        },
     };
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
@@ -387,6 +399,11 @@ public class BuildProcessor
         catch (Exception e)
         {
             Log.Warning(e, "Failed to fetch runtime dependency");
+        }
+
+        foreach (var (name, versions) in this.FORCE_PACKAGES)
+        {
+            await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgFolder, client)));
         }
     }
 
