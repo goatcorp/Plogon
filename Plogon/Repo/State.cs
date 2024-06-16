@@ -32,6 +32,8 @@ public class State
             public string BuiltCommit { get; set; }
             public DateTime TimeBuilt { get; set; }
             public string EffectiveVersion { get; set; }
+            public string? MinimumVersion { get; set; }
+
             public Dictionary<string, PluginChangelog> Changelogs { get; set; }
 
             public class PluginChangelog

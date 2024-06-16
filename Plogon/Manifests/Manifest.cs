@@ -26,6 +26,8 @@ public class Manifest
 
         public string Version { get; set; }
 
+        public string MinimumVersion { get; set; }
+        
         public List<string> Owners { get; set; }
 
         public Dictionary<string, string> Secrets { get; set; }

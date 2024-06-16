@@ -110,7 +110,7 @@ public class PluginRepository
     /// <param name="haveCommit">Commit that is now have</param>
     /// <param name="effectiveVersion">New version of the plugin</param>
     /// <param name="changelog">Plugin changelog</param>
-    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? changelog)
+    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? minimumVersion, string? changelog)
     {
         if (!this.State.Channels.ContainsKey(channelName))
         {
@@ -124,14 +124,16 @@ public class PluginRepository
             pluginState.BuiltCommit = haveCommit;
             pluginState.TimeBuilt = DateTime.Now;
             pluginState.EffectiveVersion = effectiveVersion;
+            pluginState.MinimumVersion = minimumVersion;
         }
         else
         {
-            pluginState = new State.Channel.PluginState()
+            pluginState = new State.Channel.PluginState
             {
                 BuiltCommit = haveCommit,
                 TimeBuilt = DateTime.Now,
                 EffectiveVersion = effectiveVersion,
+                MinimumVersion = minimumVersion,
             };
             channel.Plugins[plugin] = pluginState;
         }

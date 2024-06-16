@@ -1046,7 +1046,14 @@ public class BuildProcessor
             {
                 try
                 {
-                    this.pluginRepository.UpdatePluginHave(task.Channel, task.InternalName, task.Manifest.Plugin.Commit, version!, changelog);
+                    this.pluginRepository.UpdatePluginHave(
+                        task.Channel,
+                        task.InternalName,
+                        task.Manifest.Plugin.Commit,
+                        version!,
+                        task.Manifest.Plugin.MinimumVersion,
+                        changelog);
+
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
                     foreach (var file in dpOutput.GetFiles())
