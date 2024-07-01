@@ -722,6 +722,9 @@ public class BuildProcessor
 
         [JsonProperty]
         public string? InternalName { get; set; }
+        
+        [JsonProperty]
+        public int? DalamudApiLevel { get; set; }
     }
 
     static async Task RetryUntil(Func<Task> what, int maxTries = 10)
@@ -1034,6 +1037,10 @@ public class BuildProcessor
                     throw new Exception("Internal name in generated manifest JSON differs from DIP17 folder name.");
 
                 version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
+                
+                // TODO: Get this from an API or something
+                if (manifest.DalamudApiLevel != PlogonSystemDefine.API_LEVEL)
+                    throw new ApiLevelException(manifest.DalamudApiLevel ?? -1, PlogonSystemDefine.API_LEVEL);
             }
             catch (Exception ex)
             {
@@ -1150,11 +1157,6 @@ public class BuildProcessor
                     var manifestObj = JObject.Parse(manifestText);
                     manifestObj["_isDip17Plugin"] = true;
                     manifestObj["_Dip17Channel"] = task.Channel;
-
-                    // Get this from an API or something
-                    var apiLevel = manifestObj["DalamudApiLevel"]?.Value<int>();
-                    if (apiLevel is not PlogonSystemDefine.API_LEVEL)
-                        throw new ApiLevelException(apiLevel ?? 0, PlogonSystemDefine.API_LEVEL);
 
                     await File.WriteAllTextAsync(manifestFile.FullName, manifestObj.ToString());
                 }
