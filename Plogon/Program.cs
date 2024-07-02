@@ -541,8 +541,8 @@ class Program
                         $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})";
                     var committedColor = !anyFailed ? Color.Green : Color.Red;
                     var committedTitle = "Builds committed";
-                    await publicChannelWebhook.Send(committedColor, committedText, committedTitle, string.Empty);
-                    await pacChannelWebhook.Send(committedColor, committedText, committedTitle, string.Empty);
+                    await publicChannelWebhook.SendSplitting(committedColor, committedText, committedTitle, string.Empty);
+                    await pacChannelWebhook.SendSplitting(committedColor, committedText, committedTitle, string.Empty);
 
                     // TODO: We don't support this for removals for now
                     foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
