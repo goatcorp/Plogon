@@ -76,12 +76,15 @@ public class DiscordWebhook
         {
             if (buffer.Length + part.Length > 2000)
             {
-                messages.Add(buffer);
+                messages.Add(buffer.Trim());
                 buffer = "";
             }
 
             buffer += part + "\n";
         }
+        
+        // flush final buffer
+        messages.Add(buffer.Trim());
 
         foreach (var body in messages)
         {
