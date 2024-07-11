@@ -451,7 +451,7 @@ public class BuildProcessor
     /// <param name="LinesRemoved">Number of lines removed.</param>
     public record PluginDiffSet(string? HosterUrl, string? RegularDiffLink, string? SemanticDiffLink, int LinesAdded, int LinesRemoved);
 
-    private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
+    private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks, bool doSemantic)
     {
         var internalName = task.InternalName;
         var haveCommit = task.HaveCommit;
@@ -602,13 +602,17 @@ public class BuildProcessor
         var diffNormal = await MakeAndUploadDiff();
 
         string? diffSemantic = null;
-        try
+
+        if (doSemantic)
         {
-            diffSemantic = await MakeAndUploadSemantic();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Semantic diff failed");
+            try
+            {
+                diffSemantic = await MakeAndUploadSemantic();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Semantic diff failed");
+            }
         }
         
         return new PluginDiffSet(hosterUrl, diffNormal, diffSemantic, linesAdded, linesRemoved);
@@ -895,7 +899,7 @@ public class BuildProcessor
             new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archive.Name}.zip"));
         ZipFile.CreateFromDirectory(archive.FullName, archiveZipFile.FullName);
         
-        var diff = await GetPluginDiff(work, task, otherTasks);
+        var diff = await GetPluginDiff(work, task, otherTasks, !commit);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
