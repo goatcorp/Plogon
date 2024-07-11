@@ -569,7 +569,16 @@ public class BuildProcessor
         }
         
         var diffNormal = await MakeAndUploadDiff(false);
-        var diffSemantic = await MakeAndUploadDiff(true);
+
+        string? diffSemantic = null;
+        try
+        {
+            diffSemantic = await MakeAndUploadDiff(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Semantic diff failed");
+        }
         
         return new PluginDiffSet(hosterUrl, diffNormal, diffSemantic, linesAdded, linesRemoved);
     }
