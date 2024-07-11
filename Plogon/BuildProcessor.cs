@@ -526,7 +526,7 @@ public class BuildProcessor
         async Task<string?> MakeAndUploadSemantic()
         {
             var diffPsi = new ProcessStartInfo("/bin/bash",
-                                               $"(set -o pipefail ; git diff --submodule=diff {haveCommit}..{wantCommit} | terminal-to-html -preview)")
+                                               $"-c \"set -o pipefail && git diff --submodule=diff {haveCommit}..{wantCommit} | terminal-to-html -preview\"")
             {
                 RedirectStandardOutput = true,
                 WorkingDirectory = workDir.FullName,
