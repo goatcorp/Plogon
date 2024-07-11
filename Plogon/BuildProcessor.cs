@@ -583,12 +583,12 @@ public class BuildProcessor
 
             if (match.Success)
             {
-                if (!match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions?.Value, out linesAdded))
+                if (!match.Groups.TryGetValue("numInsertions", out var groupInsertions) || !int.TryParse(groupInsertions?.Value, out linesAdded))
                 {
                     Log.Error("Could not parse insertions");
                 }
 
-                if (!match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions?.Value, out linesRemoved))
+                if (!match.Groups.TryGetValue("numDeletions", out var groupDeletions) || !int.TryParse(groupDeletions?.Value, out linesRemoved))
                 {
                     Log.Error("Could not parse deletions");
                 }
