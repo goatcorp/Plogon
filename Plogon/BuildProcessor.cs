@@ -440,29 +440,18 @@ public class BuildProcessor
         [JsonPropertyName("key")]
         public string? Key { get; set; }
     };
-
+    
     /// <summary>
-    /// Info about a diff
+    /// A set of diffs.
     /// </summary>
-    public class PluginDiff
-    {
-        /// <summary>
-        /// URL to reach the diff at
-        /// </summary>
-        public string DiffUrl = null!;
+    /// <param name="HosterUrl">Url on git hosting platform.</param>
+    /// <param name="RegularDiffLink">Regular diff info.</param>
+    /// <param name="SemanticDiffLink">Semantic diff info.</param>
+    /// <param name="LinesAdded">Number of lines added.</param>
+    /// <param name="LinesRemoved">Number of lines removed.</param>
+    public record PluginDiffSet(string? HosterUrl, string? RegularDiffLink, string? SemanticDiffLink, int LinesAdded, int LinesRemoved);
 
-        /// <summary>
-        /// How many lines were added
-        /// </summary>
-        public int DiffLinesAdded;
-
-        /// <summary>
-        /// How many lines were removed
-        /// </summary>
-        public int DiffLinesRemoved;
-    }
-
-    private async Task<PluginDiff> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
+    private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks)
     {
         var internalName = task.InternalName;
         var haveCommit = task.HaveCommit;
@@ -485,19 +474,18 @@ public class BuildProcessor
 
         using var client = new HttpClient();
 
-        var result = new PluginDiff();
-
         var url = host.AbsoluteUri.Replace(".git", string.Empty);
 
+        string? hosterUrl = null;
         switch (host.Host)
         {
             case "github.com":
                 // GitHub does not support diffing from 0
                 if (haveCommit != emptyTree)
-                    result.DiffUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
+                    hosterUrl = $"{url}/compare/{haveCommit}..{wantCommit}";
                 break;
             case "gitlab.com":
-                result.DiffUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
+                hosterUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
                 break;
         }
 
@@ -505,79 +493,85 @@ public class BuildProcessor
         if (!await CheckCommitExists(workDir, haveCommit))
             haveCommit = emptyTree;
 
-        var diffPsi = new ProcessStartInfo("git",
+        async Task<string?> MakeAndUploadDiff(bool semantic)
+        {
+            var diffPsi = new ProcessStartInfo("git",
             $"diff --submodule=diff {haveCommit}..{wantCommit}")
-        {
-            RedirectStandardOutput = true,
-            WorkingDirectory = workDir.FullName,
-        };
-
-        var process = Process.Start(diffPsi);
-        if (process == null)
-            throw new Exception("Diff process was null.");
-
-        var diffOutput = await process.StandardOutput.ReadToEndAsync();
-        Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
-
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-
-        diffPsi = new ProcessStartInfo("git",
-            $"diff --shortstat --submodule=diff {haveCommit}..{wantCommit}")
-        {
-            RedirectStandardOutput = true,
-            WorkingDirectory = workDir.FullName,
-        };
-
-        process = Process.Start(diffPsi);
-        if (process == null)
-            throw new Exception("Diff process was null.");
-
-        var shortstatOutput = await process.StandardOutput.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
-
-        var regex = new Regex(@"^\s*(?:(?<numFilesChanged>[0-9]+) files? changed)?(?:, )?(?:(?<numInsertions>[0-9]+) insertions?\(\+\))?(?:, )?(?:(?<numDeletions>[0-9]+) deletions?\(-\))?\s*$");
-        var match = regex.Match(shortstatOutput);
-
-        result.DiffLinesAdded = 0;
-        result.DiffLinesRemoved = 0;
-
-        if (match.Success)
-        {
-            if (match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions.Value, out var linesAdded))
             {
-                result.DiffLinesAdded = linesAdded;
-            }
+                RedirectStandardOutput = true,
+                WorkingDirectory = workDir.FullName,
+            };
+            
+            if (semantic)
+                diffPsi.Environment["GIT_EXTERNAL_DIFF"] = "difft";
 
-            if (match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions.Value, out var linesRemoved))
-            {
-                result.DiffLinesRemoved = linesRemoved;
-            }
+            var process = Process.Start(diffPsi);
+            if (process == null)
+                throw new Exception("Diff process was null.");
+
+            var diffOutput = await process.StandardOutput.ReadToEndAsync();
+            Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
+
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+                throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+
+            if (haveCommit == emptyTree)
+                return null;
+
+            var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
+            res.EnsureSuccessStatusCode();
+
+            var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+            return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
         }
 
-        Log.Verbose("{Args}: {Output} - {Length}, +{LinesAdded} -{LinesRemoved}", diffPsi.Arguments, shortstatOutput, shortstatOutput.Length, result.DiffLinesAdded, result.DiffLinesRemoved);
-
-        if (!string.IsNullOrEmpty(result.DiffUrl))
-            return result;
-
-        if (haveCommit == emptyTree)
+        var linesAdded = 0;
+        var linesRemoved = 0;
+        
+        // shortstat
         {
-            result.DiffUrl = url;
-            return result;
+            var diffPsi = new ProcessStartInfo("git",
+                                           $"diff --shortstat --submodule=diff {haveCommit}..{wantCommit}")
+            {
+                RedirectStandardOutput = true,
+                WorkingDirectory = workDir.FullName,
+            };
+
+            var process = Process.Start(diffPsi);
+            if (process == null)
+                throw new Exception("Diff process was null.");
+
+            var shortstatOutput = await process.StandardOutput.ReadToEndAsync();
+
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+                throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+            
+
+            var regex = new Regex(@"^\s*(?:(?<numFilesChanged>[0-9]+) files? changed)?(?:, )?(?:(?<numInsertions>[0-9]+) insertions?\(\+\))?(?:, )?(?:(?<numDeletions>[0-9]+) deletions?\(-\))?\s*$");
+            var match = regex.Match(shortstatOutput);
+
+            if (match.Success)
+            {
+                if (!match.Groups.TryGetValue("numInsertions", out var groupInsertions) && int.TryParse(groupInsertions?.Value, out linesAdded))
+                {
+                    Log.Error("Could not parse insertions");
+                }
+
+                if (!match.Groups.TryGetValue("numDeletions", out var groupDeletions) && int.TryParse(groupDeletions?.Value, out linesRemoved))
+                {
+                    Log.Error("Could not parse deletions");
+                }
+            }
+            
+            Log.Verbose("{Args}: {Output} - {Length}, +{LinesAdded} -{LinesRemoved}", diffPsi.Arguments, shortstatOutput, shortstatOutput.Length, linesAdded, linesRemoved);
         }
-
-        var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
-        res.EnsureSuccessStatusCode();
-
-        var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
-
-        result.DiffUrl = $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
-
-        return result;
+        
+        var diffNormal = await MakeAndUploadDiff(false);
+        var diffSemantic = await MakeAndUploadDiff(true);
+        
+        return new PluginDiffSet(hosterUrl, diffNormal, diffSemantic, linesAdded, linesRemoved);
     }
 
     private async Task<bool> CheckCommitExists(DirectoryInfo workDir, string commit)
@@ -668,12 +662,10 @@ public class BuildProcessor
         /// <param name="diff">diff url</param>
         /// <param name="version">plugin version</param>
         /// <param name="task">processed task</param>
-        public BuildResult(bool success, PluginDiff? diff, string? version, BuildTask task)
+        public BuildResult(bool success, PluginDiffSet? diff, string? version, BuildTask task)
         {
             this.Success = success;
-            this.DiffUrl = diff?.DiffUrl;
-            this.DiffLinesAdded = diff?.DiffLinesAdded;
-            this.DiffLinesRemoved = diff?.DiffLinesRemoved;
+            this.Diff = diff;
             this.Version = version;
             this.PreviousVersion = task.HaveVersion;
             this.Task = task;
@@ -687,7 +679,7 @@ public class BuildProcessor
         /// <summary>
         /// Where the diff is
         /// </summary>
-        public string? DiffUrl { get; private set; }
+        public PluginDiffSet? Diff { get; private set; }
 
         /// <summary>
         /// The version of the plugin artifact
@@ -703,16 +695,6 @@ public class BuildProcessor
         /// The task that was processed
         /// </summary>
         public BuildTask Task { get; private set; }
-
-        /// <summary>
-        /// The amount of lines added, if available.
-        /// </summary>
-        public int? DiffLinesAdded { get; private set; }
-
-        /// <summary>
-        /// The amount of lines removed, if available.
-        /// </summary>
-        public int? DiffLinesRemoved { get; private set; }
     }
 
     private class LegacyPluginManifest

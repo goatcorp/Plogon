@@ -109,6 +109,7 @@ public class PluginRepository
     /// <param name="plugin">The internalname of the plugin</param>
     /// <param name="haveCommit">Commit that is now have</param>
     /// <param name="effectiveVersion">New version of the plugin</param>
+    /// <param name="minimumVersion">Minimum version Dalamud should still try to load.</param>
     /// <param name="changelog">Plugin changelog</param>
     public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? minimumVersion, string? changelog)
     {

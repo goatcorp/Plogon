@@ -296,16 +296,25 @@ class Program
                         var status = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, tasks);
                         statuses.Add(status);
 
+                        var mainDiffUrl = status.Diff?.HosterUrl ?? status.Diff?.RegularDiffLink;
+                        
                         if (status.Success)
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
-                                task.Manifest.Plugin.Commit, status.DiffUrl ?? "null", status.DiffLinesAdded ?? -1, status.DiffLinesRemoved ?? -1);
+                                task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", status.Diff?.LinesAdded ?? -1, status.Diff?.LinesRemoved ?? -1);
 
+
+                            var linesAddedText = status.Diff?.LinesAdded == null ? "?" : status.Diff.LinesAdded.ToString();
                             var prevVersionText = string.IsNullOrEmpty(status.PreviousVersion)
                                 ? string.Empty
                                 : $", prev. {status.PreviousVersion}";
-                            var diffLink = status.DiffUrl == url ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
-                                $"[Diff]({status.DiffUrl}) <sup><sub>({status.DiffLinesAdded} lines{prevVersionText})</sub></sup>";
+                            var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
+                                               $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
+                            
+                            if (status.Diff?.SemanticDiffLink != null)
+                            {
+                                diffLink += $" - [Semantic]({status.Diff.SemanticDiffLink})";
+                            }
 
                             // We don't want to indicate success for continuous builds
                             if (mode != ModeOfOperation.Continuous)
@@ -328,15 +337,15 @@ class Program
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
                                     prNumber);
 
-                            if (status.DiffLinesAdded.HasValue)
+                            if (status.Diff != null)
                             {
-                                if (status.DiffLinesAdded > 1000)
+                                if (status.Diff.LinesAdded > 1000)
                                 {
                                     prLabels &= ~GitHubApi.PrLabel.SizeSmall;
                                     prLabels &= ~GitHubApi.PrLabel.SizeMid;
                                     prLabels |= GitHubApi.PrLabel.SizeLarge;
                                 }
-                                else if (status.DiffLinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                else if (status.Diff.LinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
                                 {
                                     prLabels &= ~GitHubApi.PrLabel.SizeSmall;
                                     prLabels |= GitHubApi.PrLabel.SizeMid;
@@ -370,8 +379,8 @@ class Program
                                     PrNumber = prInt,
                                     Changelog = changelog,
                                     IsInitialRelease = task.IsNewPlugin,
-                                    DiffLinesAdded = status.DiffLinesAdded,
-                                    DiffLinesRemoved = status.DiffLinesRemoved,
+                                    DiffLinesAdded = status.Diff?.LinesAdded,
+                                    DiffLinesRemoved = status.Diff?.LinesRemoved,
                                 });
                             }
                         }
@@ -381,7 +390,7 @@ class Program
                                 task.Manifest.Plugin.Commit);
 
                             buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                $"Build failed ([Diff]({status.DiffUrl}))");
+                                $"Build failed ([Diff]({mainDiffUrl}))");
                             numFailed++;
                         }
                     }
