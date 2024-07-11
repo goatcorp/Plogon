@@ -533,6 +533,8 @@ public class BuildProcessor
             };
             
             diffPsi.Environment["GIT_EXTERNAL_DIFF"] = "difft";
+            diffPsi.Environment["DFT_COLOR"] = "always";
+            diffPsi.Environment["DFT_WIDTH"] = "160";
 
             var process = Process.Start(diffPsi);
             if (process == null)
