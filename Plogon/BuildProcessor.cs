@@ -493,7 +493,7 @@ public class BuildProcessor
         if (!await CheckCommitExists(workDir, haveCommit))
             haveCommit = emptyTree;
 
-        async Task<string?> MakeAndUploadDiff(bool semantic)
+        async Task<string?> MakeAndUploadDiff()
         {
             var diffPsi = new ProcessStartInfo("git",
             $"diff --submodule=diff {haveCommit}..{wantCommit}")
@@ -501,9 +501,6 @@ public class BuildProcessor
                 RedirectStandardOutput = true,
                 WorkingDirectory = workDir.FullName,
             };
-            
-            if (semantic)
-                diffPsi.Environment["GIT_EXTERNAL_DIFF"] = "difft";
 
             var process = Process.Start(diffPsi);
             if (process == null)
@@ -524,6 +521,38 @@ public class BuildProcessor
 
             var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
             return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+        }
+        
+        async Task<string?> MakeAndUploadSemantic()
+        {
+            var diffPsi = new ProcessStartInfo("/bin/bash",
+                                               $"(set -o pipefail ; git diff --submodule=diff {haveCommit}..{wantCommit} | terminal-to-html -preview)")
+            {
+                RedirectStandardOutput = true,
+                WorkingDirectory = workDir.FullName,
+            };
+            
+            diffPsi.Environment["GIT_EXTERNAL_DIFF"] = "difft";
+
+            var process = Process.Start(diffPsi);
+            if (process == null)
+                throw new Exception("Diff process was null.");
+
+            var diffOutput = await process.StandardOutput.ReadToEndAsync();
+            Log.Verbose("{Args}: {Length}", diffPsi.Arguments, diffOutput.Length);
+
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+                throw new Exception($"Git could not diff: {process.ExitCode} -- {diffPsi.Arguments}");
+
+            if (haveCommit == emptyTree)
+                return null;
+
+            var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
+            res.EnsureSuccessStatusCode();
+
+            var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
+            return $"https://haste.soulja-boy-told.me/{json!.Key}.html";
         }
 
         var linesAdded = 0;
@@ -568,12 +597,12 @@ public class BuildProcessor
             Log.Verbose("{Args}: {Output} - {Length}, +{LinesAdded} -{LinesRemoved}", diffPsi.Arguments, shortstatOutput, shortstatOutput.Length, linesAdded, linesRemoved);
         }
         
-        var diffNormal = await MakeAndUploadDiff(false);
+        var diffNormal = await MakeAndUploadDiff();
 
         string? diffSemantic = null;
         try
         {
-            diffSemantic = await MakeAndUploadDiff(true);
+            diffSemantic = await MakeAndUploadSemantic();
         }
         catch (Exception ex)
         {
