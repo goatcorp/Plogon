@@ -554,7 +554,7 @@ public class BuildProcessor
             res.EnsureSuccessStatusCode();
 
             var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
-            return $"https://haste.soulja-boy-told.me/{json!.Key}.html";
+            return $"https://haste.soulja-boy-told.me/raw/{json!.Key}.html";
         }
 
         var linesAdded = 0;
