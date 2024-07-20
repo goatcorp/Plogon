@@ -549,7 +549,7 @@ class Program
                     var committedText =
                         $"{ReplaceDiscordEmotes(buildsMd.GetText(true, true))}\n\n[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId})";
                     var committedColor = !anyFailed ? Color.Green : Color.Red;
-                    var committedTitle = "Builds committed";
+                    var committedTitle = !anyFailed ? "Builds committed" : "Repo commit failed!";
                     await publicChannelWebhook.SendSplitting(committedColor, committedText, committedTitle, string.Empty);
                     await pacChannelWebhook.SendSplitting(committedColor, committedText, committedTitle, string.Empty);
 
