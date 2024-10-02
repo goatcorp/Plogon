@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -147,5 +148,34 @@ public class PluginRepository
         }
 
         SaveState();
+    }
+
+    /// <summary>
+    /// Add a list of needs to the repository.
+    /// </summary>
+    /// <param name="needs">The needs to add.</param>
+    public void AddReviewedNeeds(IEnumerable<State.Need> needs)
+    {
+        foreach (var need in needs)
+        {
+            AddReviewedNeed(need);
+        }
+        
+        this.SaveState();
+    }
+    
+    /// <summary>
+    /// Add a need to the repository.
+    /// </summary>
+    /// <param name="need">The need to add.</param>
+    /// <exception cref="Exception">Thrown if the need was already reviewed.</exception>
+    private void AddReviewedNeed(State.Need need)
+    {
+        if (this.State.ReviewedNeeds.Any(x => x.Key == need.Key && x.Version == need.Version))
+        {
+            throw new Exception($"Need {need.Key}(v{need.Version}) already in state");
+        }
+        
+        this.State.ReviewedNeeds.Add(need);
     }
 }

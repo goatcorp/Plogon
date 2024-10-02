@@ -1302,20 +1302,16 @@ public class BuildProcessor
     
     private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs)
     {
-        foreach (var need in needs)
-        {
-            if (need.ReviewedBy != null)
-                continue;
-            
-            this.pluginRepository.State.ReviewedNeeds.Add(new State.Need
+        this.pluginRepository.AddReviewedNeeds(needs
+            .Where(need => need.ReviewedBy != null)
+            .Select(need => new State.Need
             {
                 Key = need.Name,
                 ReviewedBy = this.actor ?? throw new Exception("Committing, but reviewer is null"),
                 Version = need.Version,
                 ReviewedAt = DateTime.UtcNow,
                 Type = need.Type,
-            });
-        }
+            }));
     }
     
     private static void CopySourceForArchive(DirectoryInfo from, DirectoryInfo to, int depth = 0)
