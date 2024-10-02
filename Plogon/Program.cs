@@ -514,7 +514,7 @@ class Program
                                 need.Type.ToString(),
                                 need.Name,
                                 need.Version,
-                                need.ReviewedBy ?? "⚠️ UNREVIEWED");
+                                need.ReviewedBy ?? "⚠️ " + (need.OldVersion == null ? "NEW" : "Upd. from " + need.OldVersion));
                             
                             anyUnreviewed |= need.ReviewedBy == null;
                         }
