@@ -362,10 +362,8 @@ public class BuildProcessor
         return need;
     }
 
-    private async Task<List<BuildResult.ReviewedNeed>> RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client)
+    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
-        var needs = new List<BuildResult.ReviewedNeed>();
-        
         foreach (var runtime in lockFileData.Runtimes)
         {
             Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
@@ -373,16 +371,14 @@ public class BuildProcessor
             var resultNeeds = await Task.WhenAll(runtime.Value
                 .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
                 .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder, client)).ToList());
-            needs.AddRange(resultNeeds);
+
+            foreach (var reviewedNeed in resultNeeds)
+                reviewedNeeds.Add(reviewedNeed);
         }
-        
-        return needs;
     }
 
-    private async Task<List<BuildResult.ReviewedNeed>> RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder)
+    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
-        var needs = new List<BuildResult.ReviewedNeed>();
-        
         var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
         if (lockFiles.Length == 0)
@@ -402,7 +398,7 @@ public class BuildProcessor
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
 
-            needs.AddRange(await RestorePackages(pkgFolder, lockFileData, client));
+            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds);
         }
 
         // fetch runtime packages
@@ -425,19 +421,15 @@ public class BuildProcessor
         {
             await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgFolder, client)));
         }
-
-        return needs;
     }
 
-    async Task<List<BuildResult.ReviewedNeed>> GetNeeds(BuildTask task, DirectoryInfo needs)
+    private async Task GetNeeds(BuildTask task, DirectoryInfo needsDir, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
         if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
-            return [];
+            return;
 
         using var client = new HttpClient();
         
-        var reviewedNeeds = new List<BuildResult.ReviewedNeed>();
-
         foreach (var need in task.Manifest!.Build!.Needs)
         {
             using var response = await client.GetAsync(need.Url, HttpCompletionOption.ResponseHeadersRead);
@@ -449,7 +441,7 @@ public class BuildProcessor
 
             string hash;
             
-            var fileToWriteTo = Path.Combine(needs.FullName, need.Dest!);
+            var fileToWriteTo = Path.Combine(needsDir.FullName, need.Dest!);
             {
                 await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
 
@@ -467,7 +459,6 @@ public class BuildProcessor
             Log.Information("Downloaded need {Url} to {Dest}", need.Url, need.Dest);
         }
         
-        return reviewedNeeds;
     }
 
     private class HasteResponse
@@ -794,6 +785,22 @@ public class BuildProcessor
         public IEnumerable<ReviewedNeed> Needs { get; set; }
     }
 
+    private class NeedComparer : IEqualityComparer<BuildResult.ReviewedNeed>
+    {
+        public bool Equals(BuildResult.ReviewedNeed? x, BuildResult.ReviewedNeed? y)
+        {
+            if (x is null || y is null)
+                return false;
+            
+            return x.Name == y.Name && x.Version == y.Version;
+        }
+
+        public int GetHashCode(BuildResult.ReviewedNeed obj)
+        {
+            return HashCode.Combine(obj.Name, obj.Version);
+        }
+    }
+    
     private class LegacyPluginManifest
     {
         [JsonProperty]
@@ -806,13 +813,13 @@ public class BuildProcessor
         public int? DalamudApiLevel { get; set; }
     }
 
-    private static async Task<TRet> RetryUntil<TRet>(Func<Task<TRet>> what, int maxTries = 10)
+    private static async Task RetryUntil(Func<Task> what, int maxTries = 10)
     {
         while (true)
         {
             try
             {
-                return await what();
+                await what();
             }
             catch (Exception ex)
             {
@@ -939,10 +946,9 @@ public class BuildProcessor
         {
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
-
-
-        List<BuildResult.ReviewedNeed> allNeeds = [];
-        allNeeds.AddRange(FetchSubmodules(repo));
+        
+        HashSet<BuildResult.ReviewedNeed> allNeeds = new(new NeedComparer());
+        FetchSubmodules(repo, allNeeds);
 
         if (!await CheckIfTrueCommit(workDir, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
@@ -961,16 +967,8 @@ public class BuildProcessor
 
         WriteNugetConfig(new FileInfo(Path.Combine(workDir.FullName, "nuget.config")));
         
-        var externalNeeds = await RetryUntil(async () => await GetNeeds(task, externalNeedsDir));
-        if (externalNeeds.Count > 0)
-        {
-            Log.Information("Fetched {Count} external needs", externalNeeds.Count);
-            allNeeds.AddRange(externalNeeds);
-        }
-            
-        var nugetNeeds = await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir));
-        Log.Information("Fetched {Count} nuget needs", nugetNeeds.Count);
-        allNeeds.AddRange(nugetNeeds);
+        await RetryUntil(async () => await GetNeeds(task, externalNeedsDir, allNeeds));
+        await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir, allNeeds));
         
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
 
@@ -1334,10 +1332,8 @@ public class BuildProcessor
         }
     }
     
-    private IEnumerable<BuildResult.ReviewedNeed> FetchSubmodules(Repository repo)
+    private void FetchSubmodules(Repository repo, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
-        var needs = new List<BuildResult.ReviewedNeed>();
-        
         foreach (var submodule in repo.Submodules)
         {
             repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
@@ -1345,14 +1341,12 @@ public class BuildProcessor
                 Init = true,
             });
             
-            needs.Add(GetNeedStatus(submodule.Url, submodule.WorkDirCommitId.Sha, State.Need.NeedType.Submodule));
+            reviewedNeeds.Add(GetNeedStatus(submodule.Url, submodule.WorkDirCommitId.Sha, State.Need.NeedType.Submodule));
 
             // In the case of recursive submodules
             var submoduleRepo = new Repository(Path.Combine(repo.Info.WorkingDirectory, submodule.Path));
-            needs.AddRange(FetchSubmodules(submoduleRepo));
+            FetchSubmodules(submoduleRepo, reviewedNeeds);
         }
-
-        return needs;
     }
 
     /// <summary>
