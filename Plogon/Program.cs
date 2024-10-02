@@ -11,6 +11,8 @@ using Discord;
 
 using Octokit;
 
+using Plogon.Repo;
+
 using Serilog;
 
 namespace Plogon;
@@ -510,9 +512,13 @@ class Program
                         var needsTable = MarkdownTableBuilder.Create("Type", "Name", "Version", "Reviewed by");
                         foreach (var need in allNeeds)
                         {
+                            var name = need.Name;
+                            if (need.Type == State.Need.NeedType.NuGet)
+                                name = $"[{need.Name}](https://www.nuget.org/packages/{need.Name})";
+                            
                             needsTable.AddRow(
                                 need.Type.ToString(),
-                                need.Name,
+                                name,
                                 need.Version,
                                 need.ReviewedBy ?? "⚠️ " + (need.OldVersion == null ? "NEW" : "Upd. from " + need.OldVersion));
                             
