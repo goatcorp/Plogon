@@ -820,6 +820,7 @@ public class BuildProcessor
             try
             {
                 await what();
+                return;
             }
             catch (Exception ex)
             {
