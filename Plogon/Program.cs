@@ -510,7 +510,7 @@ class Program
                     {
                         var anyUnreviewed = false;
                         var needsTable = MarkdownTableBuilder.Create("Type", "Name", "Version", "Reviewed by");
-                        foreach (var need in allNeeds)
+                        foreach (var need in allNeeds.OrderByDescending(x => x.ReviewedBy == null))
                         {
                             var name = need.Name;
                             if (need.Type == State.Need.NeedType.NuGet)
