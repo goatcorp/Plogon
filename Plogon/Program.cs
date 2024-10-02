@@ -514,7 +514,12 @@ class Program
                         {
                             var name = need.Name;
                             if (need.Type == State.Need.NeedType.NuGet)
+                            {
+                                if (PlogonSystemDefine.SafeNugetNamespaces.Any(x => name.StartsWith(x)))
+                                    continue;
+                                
                                 name = $"[{need.Name}](https://www.nuget.org/packages/{need.Name})";
+                            }
                             
                             needsTable.AddRow(
                                 need.Type.ToString(),

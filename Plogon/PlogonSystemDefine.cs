@@ -14,6 +14,11 @@ public static class PlogonSystemDefine
     /// PAC members, github logins.
     /// </summary>
     public static readonly string[] PacMembers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
+
+    /// <summary>
+    /// Nuget namespaces/packages we know are safe and don't want to see every time.
+    /// </summary>
+    public static readonly string[] SafeNugetNamespaces = new[] { "Microsoft.SourceLink.", "DotNet.ReproducibleBuilds" };
     
     /// <summary>
     /// Label for a new plugin.
