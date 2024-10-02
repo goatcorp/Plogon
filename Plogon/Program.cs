@@ -83,7 +83,7 @@ class Program
         var githubSummary = "## Build Summary\n";
         GitHubOutputBuilder.SetActive(ci);
 
-        var actor = Environment.GetEnvironmentVariable("PR_ACTOR");
+        var githubActor = Environment.GetEnvironmentVariable("PLOGON_ACTOR");
         var repoParts = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")?.Split("/");
         var repoOwner = repoParts?[0];
         var repoName = repoParts?[1];
@@ -91,7 +91,7 @@ class Program
 
         if (mode == ModeOfOperation.PullRequest && string.IsNullOrEmpty(prNumber))
             throw new Exception("PR number not set");
-
+        
         GitHubApi? gitHubApi = null;
         if (ci)
         {
@@ -104,9 +104,12 @@ class Program
 
             if (string.IsNullOrEmpty(repoName))
                 throw new Exception("repoName null or empty");
+            
+            if (githubActor == null)
+                throw new Exception("GITHUB_ACTOR not set");
 
             gitHubApi = new GitHubApi(repoOwner, repoName, token);
-            Log.Verbose("GitHub API OK, running for {Actor}", actor);
+            Log.Verbose("GitHub API OK, running for {Actor}", githubActor);
         }
 
         var secretsPk = Environment.GetEnvironmentVariable("PLOGON_SECRETS_PK");
@@ -118,7 +121,7 @@ class Program
         var numTried = 0;
         var numNoIcon = 0;
 
-        var statuses = new List<BuildProcessor.BuildResult>();
+        var allResults = new List<BuildProcessor.BuildResult>();
 
         WebServices.Stats? stats = null;
         if (mode == ModeOfOperation.PullRequest)
@@ -133,7 +136,7 @@ class Program
             }
             else if (mode == ModeOfOperation.PullRequest)
             {
-                Log.Error("Diff for PR is not available, this might lead to unnecessary builds being performed.");
+                Log.Error("Diff for PR is not available, this might lead to unnecessary builds being performed");
             }
 
             var setup = new BuildProcessor.BuildProcessorSetup
@@ -150,6 +153,7 @@ class Program
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
                 S3Client = s3Client,
+                GitHubActor = githubActor,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
@@ -168,7 +172,7 @@ class Program
 
             foreach (var buildTask in tasks)
             {
-                Log.Information(buildTask.ToString());
+                Log.Information("{TaskName}", buildTask.ToString());
             }
 
             GitHubOutputBuilder.EndGroup();
@@ -247,7 +251,7 @@ class Program
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
                             var removeStatus = await buildProcessor.ProcessTask(task, true, null, tasks);
-                            statuses.Add(removeStatus);
+                            allResults.Add(removeStatus);
 
                             if (removeStatus.Success)
                             {
@@ -264,8 +268,8 @@ class Program
 
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
 
-                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != actor) &&
-                                          PlogonSystemDefine.PacMembers.All(x => x != actor)))
+                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != githubActor) &&
+                                          PlogonSystemDefine.PacMembers.All(x => x != githubActor)))
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
@@ -293,43 +297,43 @@ class Program
                             changelog = await gitHubApi.GetIssueBody(int.Parse(prNumber));
                         }
 
-                        var status = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, tasks);
-                        statuses.Add(status);
+                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, tasks);
+                        allResults.Add(buildResult);
 
-                        var mainDiffUrl = status.Diff?.HosterUrl ?? status.Diff?.RegularDiffLink;
+                        var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;
                         
-                        if (status.Success)
+                        if (buildResult.Success)
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
-                                task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", status.Diff?.LinesAdded ?? -1, status.Diff?.LinesRemoved ?? -1);
+                                task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", buildResult.Diff?.LinesAdded ?? -1, buildResult.Diff?.LinesRemoved ?? -1);
 
 
-                            var linesAddedText = status.Diff?.LinesAdded == null ? "?" : status.Diff.LinesAdded.ToString();
-                            var prevVersionText = string.IsNullOrEmpty(status.PreviousVersion)
+                            var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
+                            var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
                                 ? string.Empty
-                                : $", prev. {status.PreviousVersion}";
+                                : $", prev. {buildResult.PreviousVersion}";
                             var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
                                                $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
                             
-                            if (status.Diff?.SemanticDiffLink != null)
+                            if (buildResult.Diff?.SemanticDiffLink != null)
                             {
-                                diffLink += $" - [Semantic]({status.Diff.SemanticDiffLink})";
+                                diffLink += $" - [Semantic]({buildResult.Diff.SemanticDiffLink})";
                             }
 
                             // We don't want to indicate success for continuous builds
                             if (mode != ModeOfOperation.Continuous)
                             {
                                 if (task.HaveVersion != null &&
-                                    Version.Parse(status.Version!) <= Version.Parse(task.HaveVersion))
+                                    Version.Parse(buildResult.Version!) <= Version.Parse(task.HaveVersion))
                                 {
                                     buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                        $"{(status.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{status.Version} - {diffLink}");
+                                        $"{(buildResult.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{buildResult.Version} - {diffLink}");
                                     prLabels |= GitHubApi.PrLabel.VersionConflict;
                                 }
                                 else
                                 {
                                     buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                        $"v{status.Version} - {diffLink}");
+                                        $"v{buildResult.Version} - {diffLink}");
                                 }
                             }
 
@@ -337,15 +341,15 @@ class Program
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
                                     prNumber);
 
-                            if (status.Diff != null)
+                            if (buildResult.Diff != null)
                             {
-                                if (status.Diff.LinesAdded > 1000)
+                                if (buildResult.Diff.LinesAdded > 1000)
                                 {
                                     prLabels &= ~GitHubApi.PrLabel.SizeSmall;
                                     prLabels &= ~GitHubApi.PrLabel.SizeMid;
                                     prLabels |= GitHubApi.PrLabel.SizeLarge;
                                 }
-                                else if (status.Diff.LinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
+                                else if (buildResult.Diff.LinesAdded > 400 && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
                                 {
                                     prLabels &= ~GitHubApi.PrLabel.SizeSmall;
                                     prLabels |= GitHubApi.PrLabel.SizeMid;
@@ -374,13 +378,13 @@ class Program
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
                                 {
                                     InternalName = task.InternalName,
-                                    Version = status.Version!,
+                                    Version = buildResult.Version!,
                                     Dip17Track = task.Channel,
                                     PrNumber = prInt,
                                     Changelog = changelog,
                                     IsInitialRelease = task.IsNewPlugin,
-                                    DiffLinesAdded = status.Diff?.LinesAdded,
-                                    DiffLinesRemoved = status.Diff?.LinesRemoved,
+                                    DiffLinesAdded = buildResult.Diff?.LinesAdded,
+                                    DiffLinesRemoved = buildResult.Diff?.LinesRemoved,
                                 });
                             }
                         }
@@ -497,8 +501,33 @@ class Program
                             $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
 
+                    // List needs in detail
+                    var allNeeds = allResults.SelectMany(x => x.Needs).ToList();
+                    var needsText = string.Empty;
+                    if (allNeeds.Count > 0)
+                    {
+                        var anyUnreviewed = false;
+                        var needsTable = MarkdownTableBuilder.Create("Type", "Name", "Version", "Reviewed by");
+                        foreach (var need in allNeeds)
+                        {
+                            needsTable.AddRow(
+                                need.Type.ToString(),
+                                need.Name,
+                                need.Version,
+                                need.ReviewedBy ?? "⚠️ UNREVIEWED");
+                            
+                            anyUnreviewed |= need.ReviewedBy == null;
+                        }
+                        
+                        needsText = 
+                            "\n\n<detail>\n##### Needs " + 
+                            (anyUnreviewed ? "(UNREVIEWED)" : "(All reviewed)") +
+                            " \n" + needsTable.GetText() +
+                            "</detail>";
+                    }
+                    
                     var commentTask = gitHubApi?.AddComment(parsedPrNum,
-                        commentText + mergeTimeText + "\n\n" + buildsMd + "\n##### " + links);
+                        commentText + mergeTimeText + "\n\n" + buildsMd + needsText + "\n##### " + links);
 
                     if (commentTask != null)
                         await commentTask;
@@ -554,7 +583,7 @@ class Program
                     await pacChannelWebhook.SendSplitting(committedColor, committedText, committedTitle, string.Empty);
 
                     // TODO: We don't support this for removals for now
-                    foreach (var buildResult in statuses.Where(x => x.Task.Type == BuildTask.TaskType.Build))
+                    foreach (var buildResult in allResults.Where(x => x.Task.Type == BuildTask.TaskType.Build))
                     {
                         if (!buildResult.Success && !aborted)
                             continue;
@@ -631,7 +660,7 @@ class Program
 
             if (numTried == 0 && prNumber != null)
             {
-                Log.Error("Was a PR, but did not build any plugins - failing.");
+                Log.Error("Was a PR, but did not build any plugins - failing");
                 anyFailed = true;
             }
 

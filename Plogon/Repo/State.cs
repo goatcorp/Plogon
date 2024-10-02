@@ -13,6 +13,7 @@ public class State
     public State()
     {
         this.Channels = new Dictionary<string, Channel>();
+        this.ReviewedNeeds = new List<Need>();
     }
 
     public class Channel
@@ -47,4 +48,26 @@ public class State
     }
 
     public IDictionary<string, Channel> Channels { get; set; }
+
+    public class Need
+    {
+        public enum NeedType
+        {
+            File,
+            NuGet,
+            Submodule,
+        }
+        
+        public NeedType Type { get; set; }
+        
+        public string Key { get; set; }
+        
+        public string Version { get; set; }
+        
+        public string ReviewedBy { get; set; }
+        
+        public DateTime ReviewedAt { get; set; }
+    }
+    
+    public List<Need> ReviewedNeeds { get; set; }
 }

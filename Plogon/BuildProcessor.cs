@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -52,6 +53,8 @@ public class BuildProcessor
 
     private readonly IAmazonS3? s3Client;
 
+    private readonly string? actor;
+    
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
@@ -98,7 +101,7 @@ public class BuildProcessor
     private readonly Dictionary<string, string[]> FORCE_PACKAGES = new()
     {
         { "Dalamud.NET.Sdk", new[]
-            // This should have all of the SDK packages we still support.
+            // This should have all the SDK packages we still support.
             { "9.0.2", "10.0.0" }
         },
     };
@@ -168,9 +171,14 @@ public class BuildProcessor
         public string? PrDiff { get; set; }
         
         /// <summary>
-        /// 
+        /// S3 client to use for artifact uploads.
         /// </summary>
         public IAmazonS3? S3Client { get; set; }
+        
+        /// <summary>
+        /// Actor of the GitHub action that triggered this build. Null in non-ci builds.
+        /// </summary>
+        public string? GitHubActor { get; set; }
     }
 
     /// <summary>
@@ -194,6 +202,8 @@ public class BuildProcessor
         this.dockerClient = new DockerClientConfiguration().CreateClient();
 
         this.s3Client = setup.S3Client;
+        
+        this.actor = setup.GitHubActor;
     }
 
     /// <summary>
@@ -329,14 +339,16 @@ public class BuildProcessor
         return tasks;
     }
 
-    async Task GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
+    async Task<BuildResult.ReviewedNeed> GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
     {
         var pkgName = name.ToLower();
         var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
         var depPath = Path.Combine(pkgFolder.FullName, fileName);
 
+        var need = GetNeedStatus(name, dependency.Resolved, State.Need.NeedType.NuGet);
+        
         if (File.Exists(depPath))
-            return;
+            return need;
 
         Log.Information("   => Getting {DepName}(v{Version})", name, dependency.Resolved);
         var url =
@@ -347,22 +359,30 @@ public class BuildProcessor
         // TODO: verify content hash
 
         await File.WriteAllBytesAsync(depPath, data);
+        return need;
     }
 
-    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client)
+    private async Task<List<BuildResult.ReviewedNeed>> RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client)
     {
+        var needs = new List<BuildResult.ReviewedNeed>();
+        
         foreach (var runtime in lockFileData.Runtimes)
         {
             Log.Information("Getting packages for runtime {Runtime}", runtime.Key);
 
-            await Task.WhenAll(runtime.Value
+            var resultNeeds = await Task.WhenAll(runtime.Value
                 .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
                 .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder, client)).ToList());
+            needs.AddRange(resultNeeds);
         }
+        
+        return needs;
     }
 
-    private async Task RestoreAllPackages(BuildTask task, DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder)
+    private async Task<List<BuildResult.ReviewedNeed>> RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder)
     {
+        var needs = new List<BuildResult.ReviewedNeed>();
+        
         var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
         if (lockFiles.Length == 0)
@@ -382,7 +402,7 @@ public class BuildProcessor
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
 
-            await RestorePackages(pkgFolder, lockFileData, client);
+            needs.AddRange(await RestorePackages(pkgFolder, lockFileData, client));
         }
 
         // fetch runtime packages
@@ -405,14 +425,18 @@ public class BuildProcessor
         {
             await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgFolder, client)));
         }
+
+        return needs;
     }
 
-    async Task GetNeeds(BuildTask task, DirectoryInfo needs)
+    async Task<List<BuildResult.ReviewedNeed>> GetNeeds(BuildTask task, DirectoryInfo needs)
     {
         if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
-            return;
+            return [];
 
         using var client = new HttpClient();
+        
+        var reviewedNeeds = new List<BuildResult.ReviewedNeed>();
 
         foreach (var need in task.Manifest!.Build!.Needs)
         {
@@ -423,16 +447,27 @@ public class BuildProcessor
             if (need.Dest!.Contains(".."))
                 throw new Exception();
 
+            string hash;
+            
             var fileToWriteTo = Path.Combine(needs.FullName, need.Dest!);
             {
                 await using Stream streamToWriteTo = File.Open(fileToWriteTo, FileMode.Create);
 
                 await streamToReadFrom.CopyToAsync(streamToWriteTo);
+            
+                streamToWriteTo.Seek(0, SeekOrigin.Begin);
+                var sha512 = SHA512.Create();
+                hash = BitConverter.ToString(sha512.ComputeHash(streamToWriteTo)).Replace("-", "").ToLower();
+                
                 streamToWriteTo.Close();
             }
+            
+            reviewedNeeds.Add(GetNeedStatus(need.Url, hash, State.Need.NeedType.File));
 
             Log.Information("Downloaded need {Url} to {Dest}", need.Url, need.Dest);
         }
+        
+        return reviewedNeeds;
     }
 
     private class HasteResponse
@@ -706,13 +741,15 @@ public class BuildProcessor
         /// <param name="diff">diff url</param>
         /// <param name="version">plugin version</param>
         /// <param name="task">processed task</param>
-        public BuildResult(bool success, PluginDiffSet? diff, string? version, BuildTask task)
+        /// <param name="needs">List of needs</param>
+        public BuildResult(bool success, PluginDiffSet? diff, string? version, BuildTask task, IEnumerable<ReviewedNeed> needs)
         {
             this.Success = success;
             this.Diff = diff;
             this.Version = version;
             this.PreviousVersion = task.HaveVersion;
             this.Task = task;
+            this.Needs = needs;
         }
 
         /// <summary>
@@ -739,6 +776,22 @@ public class BuildProcessor
         /// The task that was processed
         /// </summary>
         public BuildTask Task { get; private set; }
+        
+        /// <summary>
+        /// A need of this plugin.
+        /// </summary>
+        /// <param name="Name">The name of this need.</param>
+        /// <param name="ReviewedBy">Who reviewed this need. Null if nobody did.</param>
+        /// <param name="Version">The version of the need.</param>
+        /// <param name="OldVersion">The old version of the need, if it changed. Null if it didn't.</param>
+        /// <param name="DiffUrl">Link to diff, if available.</param>
+        /// <param name="Type">Type of the need</param>
+        public record ReviewedNeed(string Name, string? ReviewedBy, string Version, string? OldVersion, string? DiffUrl, State.Need.NeedType Type);
+        
+        /// <summary>
+        /// Needs of this plugin to be displayed to a reviewer.
+        /// </summary>
+        public IEnumerable<ReviewedNeed> Needs { get; set; }
     }
 
     private class LegacyPluginManifest
@@ -753,14 +806,13 @@ public class BuildProcessor
         public int? DalamudApiLevel { get; set; }
     }
 
-    static async Task RetryUntil(Func<Task> what, int maxTries = 10)
+    private static async Task<TRet> RetryUntil<TRet>(Func<Task<TRet>> what, int maxTries = 10)
     {
         while (true)
         {
             try
             {
-                await what();
-                return;
+                return await what();
             }
             catch (Exception ex)
             {
@@ -808,7 +860,7 @@ public class BuildProcessor
     private static void WriteNugetConfig(FileInfo output)
     {
         var nugetConfigText =
-            $"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n    <clear />\n    <add key=\"plogon\" value=\"/packages\" />\n  </packageSources>\n</configuration>";
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<configuration>\n  <packageSources>\n    <clear />\n    <add key=\"plogon\" value=\"/packages\" />\n  </packageSources>\n</configuration>";
         File.WriteAllText(output.FullName, nugetConfigText);
     }
 
@@ -834,7 +886,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, null, task);
+            return new BuildResult(true, null, null, task, []);
         }
 
         if (task.Manifest == null)
@@ -846,15 +898,16 @@ public class BuildProcessor
         ParanoiaValidateTask(task);
 
         var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
-        var taskRoot = this.workFolder.CreateSubdirectory(taskFolderName);
-        Log.Verbose("taskRoot: {TaskRoot}", taskRoot.FullName);
-        var work = taskRoot.CreateSubdirectory("work");
-        var archive = taskRoot.CreateSubdirectory("archive");
-        var output = taskRoot.CreateSubdirectory("output");
-        var packages = taskRoot.CreateSubdirectory("packages");
-        var needs = taskRoot.CreateSubdirectory("needs");
+        var taskRootDir = this.workFolder.CreateSubdirectory(taskFolderName);
+        Log.Verbose("taskRoot: {TaskRoot}", taskRootDir.FullName);
+        var workDir = taskRootDir.CreateSubdirectory("work");
+        var archiveDir = taskRootDir.CreateSubdirectory("archive");
+        var outputDir = taskRootDir.CreateSubdirectory("output");
+        var packagesDir = taskRootDir.CreateSubdirectory("packages");
+        var externalNeedsDir = taskRootDir.CreateSubdirectory("needs");
 
-        Debug.Assert(staticFolder.Exists);
+        if (!staticFolder.Exists)
+            throw new Exception("Static folder does not exist");
 
         if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
             throw new Exception("No repository specified");
@@ -869,44 +922,56 @@ public class BuildProcessor
             throw new Exception("Not allowed");
         
         // Always clone fresh
-        if (work.Exists)
+        if (workDir.Exists)
         {
-            work.Delete(true);
-            work.Create();
+            workDir.Delete(true);
+            workDir.Create();
         }
 
-        Repository.Clone(task.Manifest.Plugin.Repository, work.FullName, new CloneOptions
+        Repository.Clone(task.Manifest.Plugin.Repository, workDir.FullName, new CloneOptions
         {
             Checkout = false,
             RecurseSubmodules = false,
         });
 
-        var repo = new Repository(work.FullName);
+        var repo = new Repository(workDir.FullName);
         Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
-        HandleSubmodules(repo);
 
-        if (!await CheckIfTrueCommit(work, task.Manifest.Plugin.Commit))
+
+        List<BuildResult.ReviewedNeed> allNeeds = [];
+        allNeeds.AddRange(FetchSubmodules(repo));
+
+        if (!await CheckIfTrueCommit(workDir, task.Manifest.Plugin.Commit))
             throw new Exception("Commit in manifest is not a true commit, please don't specify tags");
 
         // Archive source code before build
-        CopySourceForArchive(work, archive);
+        CopySourceForArchive(workDir, archiveDir);
         
         // Create archive zip
         var archiveZipFile =
-            new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archive.Name}.zip"));
-        ZipFile.CreateFromDirectory(archive.FullName, archiveZipFile.FullName);
+            new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archiveDir.Name}.zip"));
+        ZipFile.CreateFromDirectory(archiveDir.FullName, archiveZipFile.FullName);
         
-        var diff = await GetPluginDiff(work, task, otherTasks, !commit);
+        var diff = await GetPluginDiff(workDir, task, otherTasks, !commit);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
-        WriteNugetConfig(new FileInfo(Path.Combine(work.FullName, "nuget.config")));
+        WriteNugetConfig(new FileInfo(Path.Combine(workDir.FullName, "nuget.config")));
         
-        await RetryUntil(async () => await GetNeeds(task, needs));
-        await RetryUntil(async () => await RestoreAllPackages(task, work, packages));
+        var externalNeeds = await RetryUntil(async () => await GetNeeds(task, externalNeedsDir));
+        if (externalNeeds.Count > 0)
+        {
+            Log.Information("Fetched {Count} external needs", externalNeeds.Count);
+            allNeeds.AddRange(externalNeeds);
+        }
+            
+        var nugetNeeds = await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir));
+        Log.Information("Fetched {Count} nuget needs", nugetNeeds.Count);
+        allNeeds.AddRange(nugetNeeds);
+        
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
 
         var dockerEnv = new List<string>
@@ -951,12 +1016,12 @@ public class BuildProcessor
                     AutoRemove = false,
                     Binds = new List<string>
                     {
-                        $"{work.FullName}:/work/repo",
+                        $"{workDir.FullName}:/work/repo",
                         $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
                         $"{staticFolder.FullName}:/static:ro",
-                        $"{output.FullName}:/output",
-                        $"{packages.FullName}:/packages:ro",
-                        $"{needs.FullName}:/needs:ro"
+                        $"{outputDir.FullName}:/output",
+                        $"{packagesDir.FullName}:/packages:ro",
+                        $"{externalNeedsDir.FullName}:/needs:ro"
                     }
                 },
                 Env = dockerEnv,
@@ -1019,7 +1084,7 @@ public class BuildProcessor
                 Force = true,
             });
 
-        var outputFiles = output.GetFiles("*.dll", SearchOption.AllDirectories);
+        var outputFiles = outputDir.GetFiles("*.dll", SearchOption.AllDirectories);
         foreach (var outputFile in outputFiles)
         {
             if (DalamudInternalDll.Any(x => x == outputFile.Name))
@@ -1028,7 +1093,7 @@ public class BuildProcessor
             }
         }
 
-        var dpOutput = new DirectoryInfo(Path.Combine(output.FullName, task.InternalName));
+        var dpOutput = new DirectoryInfo(Path.Combine(outputDir.FullName, task.InternalName));
         string? version = null;
 
         if (dpOutput.Exists)
@@ -1086,6 +1151,8 @@ public class BuildProcessor
                         version!,
                         task.Manifest.Plugin.MinimumVersion,
                         changelog);
+                    
+                    this.CommitReviewedNeeds(allNeeds);
 
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
@@ -1201,7 +1268,7 @@ public class BuildProcessor
         try
         {
             // Cleanup work folder to save storage space on actions
-            work.Delete(true);
+            workDir.Delete(true);
             archiveZipFile.Delete();
         }
         catch (Exception ex)
@@ -1209,7 +1276,46 @@ public class BuildProcessor
             Log.Error(ex, "Could not cleanup workspace");
         }
         
-        return new BuildResult(exitCode == 0, diff, version, task);
+        return new BuildResult(exitCode == 0, diff, version, task, allNeeds);
+    }
+
+    private BuildResult.ReviewedNeed GetNeedStatus(string key, string version, State.Need.NeedType type)
+    {
+        var existingReview = this.pluginRepository.State.ReviewedNeeds
+                                 .FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.Ordinal) &&
+                                                      string.Equals(x.Version, version, StringComparison.Ordinal));
+
+        // TODO: Diff submodules?
+        
+        if (existingReview == null)
+        {
+            var lastReview = this.pluginRepository.State.ReviewedNeeds
+                                 .Where(x => string.Equals(x.Key, key, StringComparison.Ordinal))
+                                 .OrderByDescending(x => x.ReviewedAt)
+                                 .FirstOrDefault();
+            
+            return new(key, null, version, lastReview?.Version, null, type);
+        }
+        
+        return new(key, existingReview.ReviewedBy, version, existingReview.Version, null, type);
+    }
+    
+    private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs)
+    {
+        foreach (var need in needs)
+        {
+            if (need.ReviewedBy != null)
+                continue;
+            
+            this.pluginRepository.State.ReviewedNeeds.Add(new State.Need
+            {
+                Key = need.Name,
+                ReviewedBy = this.actor ?? throw new Exception("Committing, but reviewer is null"),
+                Version = need.Version,
+                ReviewedAt = DateTime.UtcNow,
+                Type = need.Type,
+            });
+        }
     }
     
     private static void CopySourceForArchive(DirectoryInfo from, DirectoryInfo to, int depth = 0)
@@ -1231,20 +1337,26 @@ public class BuildProcessor
             CopySourceForArchive(dir, to.CreateSubdirectory(dir.Name), depth + 1);
         }
     }
-
-    private static void HandleSubmodules(Repository repo)
+    
+    private IEnumerable<BuildResult.ReviewedNeed> FetchSubmodules(Repository repo)
     {
+        var needs = new List<BuildResult.ReviewedNeed>();
+        
         foreach (var submodule in repo.Submodules)
         {
             repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
             {
                 Init = true,
             });
+            
+            needs.Add(GetNeedStatus(submodule.Url, submodule.WorkDirCommitId.Sha, State.Need.NeedType.Submodule));
 
             // In the case of recursive submodules
             var submoduleRepo = new Repository(Path.Combine(repo.Info.WorkingDirectory, submodule.Path));
-            HandleSubmodules(submoduleRepo);
+            needs.AddRange(FetchSubmodules(submoduleRepo));
         }
+
+        return needs;
     }
 
     /// <summary>

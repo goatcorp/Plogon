@@ -36,10 +36,8 @@ public class PluginRepository
         else
         {
             this.State = new State();
-            Log.Information("State for repo at {repo} does not exist, creating new one", repoDirectory.FullName);
+            Log.Warning("State for repo at {Repo} does not exist, creating new one", repoDirectory.FullName);
         }
-
-        Log.Information("Plugin repository at {repo} initialized", repoDirectory.FullName);
     }
 
     private void SaveState()

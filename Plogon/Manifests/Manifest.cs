@@ -39,7 +39,7 @@ public class Manifest
         {
             public string Type { get; set; }
 
-            public string? Url { get; set; }
+            public string Url { get; set; }
 
             public string? Dest { get; set; }
 

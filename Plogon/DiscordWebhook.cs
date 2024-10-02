@@ -67,6 +67,13 @@ public class DiscordWebhook
         return await this.Client.SendMessageAsync(embeds: new[] { embed }, username: username, avatarUrl: avatarUrl);
     }
 
+    /// <summary>
+    /// Send a webhook, splitting the message if it's too long
+    /// </summary>
+    /// <param name="color"></param>
+    /// <param name="message"></param>
+    /// <param name="title"></param>
+    /// <param name="footer"></param>
     public async Task SendSplitting(Color color, string message, string title, string footer)
     {
         var messages = new List<string>();

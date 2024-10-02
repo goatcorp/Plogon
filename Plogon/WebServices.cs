@@ -95,7 +95,6 @@ public class WebServices
             return null;
 
         var text = await result.Content.ReadAsStringAsync();
-        Log.Information("PR: {Text}", text);
         result.EnsureSuccessStatusCode();
 
         return text;
