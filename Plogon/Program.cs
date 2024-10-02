@@ -520,10 +520,10 @@ class Program
                         }
                         
                         needsText = 
-                            "\n\n<detail>\n##### Needs " + 
+                            "\n\n<detail>\n<summary>Needs " + 
                             (anyUnreviewed ? "(UNREVIEWED)" : "(All reviewed)") +
-                            " \n" + needsTable.GetText() +
-                            "</detail>";
+                            "</summary>\n\n" + needsTable.GetText() +
+                            "</detail>\n\n";
                     }
                     
                     var commentTask = gitHubApi?.AddComment(parsedPrNum,
