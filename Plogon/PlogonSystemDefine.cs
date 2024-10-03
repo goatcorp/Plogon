@@ -13,12 +13,32 @@ public static class PlogonSystemDefine
     /// <summary>
     /// PAC members, github logins.
     /// </summary>
-    public static readonly string[] PacMembers = new[] { "goaaats", "reiichi001", "lmcintyre", "ackwell", "karashiiro", "philpax" };
+    public static readonly string[] PacMembers =
+    [
+        "goaaats",
+        "reiichi001",
+        "lmcintyre",
+        "ackwell",
+        "karashiiro",
+        "philpax",
+    ];
 
     /// <summary>
     /// Nuget namespaces/packages we know are safe and don't want to see every time.
     /// </summary>
-    public static readonly string[] SafeNugetNamespaces = new[] { "Microsoft.SourceLink.", "DotNet.ReproducibleBuilds" };
+    public static readonly string[] SafeNugetNamespaces =
+    [
+        "Microsoft.SourceLink.",
+        "DotNet.ReproducibleBuilds",
+        "DalamudPackager",
+        "System.Memory",
+        "System.Threading.",
+        "System.Buffers",
+        "System.Reactive",
+        "System.Text.Json",
+        "System.Text.Encodings",
+        "Newtonsoft.Json",
+    ];
     
     /// <summary>
     /// Label for a new plugin.
