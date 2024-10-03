@@ -110,7 +110,17 @@ public class PluginRepository
     /// <param name="effectiveVersion">New version of the plugin</param>
     /// <param name="minimumVersion">Minimum version Dalamud should still try to load.</param>
     /// <param name="changelog">Plugin changelog</param>
-    public void UpdatePluginHave(string channelName, string plugin, string haveCommit, string effectiveVersion, string? minimumVersion, string? changelog)
+    /// <param name="reviewer">Who reviewed this version</param>
+    /// <param name="needs">Needs we had for this version</param>
+    public void UpdatePluginHave(
+        string channelName,
+        string plugin,
+        string haveCommit,
+        string effectiveVersion,
+        string? minimumVersion,
+        string? changelog,
+        string reviewer,
+        IEnumerable<(string Key, string Version)> needs)
     {
         if (!this.State.Channels.ContainsKey(channelName))
         {
@@ -138,14 +148,13 @@ public class PluginRepository
             channel.Plugins[plugin] = pluginState;
         }
 
-        if (!string.IsNullOrWhiteSpace(changelog))
+        pluginState.Changelogs[effectiveVersion] = new State.Channel.PluginState.PluginChangelog
         {
-            pluginState.Changelogs[effectiveVersion] = new State.Channel.PluginState.PluginChangelog()
-            {
-                Changelog = changelog,
-                TimeReleased = DateTime.Now,
-            };
-        }
+            Changelog = changelog,
+            TimeReleased = DateTime.Now,
+            UsedNeeds = needs.Select(x => new State.Channel.PluginState.PluginChangelog.UsedNeed(x.Key, x.Version)).ToList(),
+            Reviewer = reviewer,
+        };
 
         SaveState();
     }

@@ -37,10 +37,17 @@ public class State
 
             public Dictionary<string, PluginChangelog> Changelogs { get; set; }
 
+            // This should really be "version", but we're stuck with "changelog" for now
             public class PluginChangelog
             {
                 public DateTime TimeReleased { get; set; }
-                public string Changelog { get; set; }
+                public string? Changelog { get; set; }
+                
+                public record UsedNeed(string Key, string Version);
+
+                public List<UsedNeed>? UsedNeeds { get; set; }
+
+                public string Reviewer { get; set; }
             }
         }
 

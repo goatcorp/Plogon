@@ -1149,7 +1149,9 @@ public class BuildProcessor
                         task.Manifest.Plugin.Commit,
                         version!,
                         task.Manifest.Plugin.MinimumVersion,
-                        changelog);
+                        changelog,
+                        this.actor ?? throw new Exception("Committing, but actor is null"),
+                        allNeeds.Select(x => (x.Name, x.Version)));
                     
                     this.CommitReviewedNeeds(allNeeds);
 
