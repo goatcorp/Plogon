@@ -472,9 +472,7 @@ class Program
                         $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
-
-                    // API9
-                    commentText = "**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it!\n\n";
+                    commentText += "\n\n**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it!\n\n";
 
                     if (!anyTried)
                         commentText =
@@ -508,7 +506,7 @@ class Program
                     var needsText = string.Empty;
                     if (allNeeds.Count > 0)
                     {
-                        var anyUnreviewed = false;
+                        var numUnreviewed = 0;
                         var needsTable = MarkdownTableBuilder.Create("Type", "Name", "Version", "Reviewed by");
                         foreach (var need in allNeeds.OrderByDescending(x => x.ReviewedBy == null))
                         {
@@ -526,13 +524,14 @@ class Program
                                 name,
                                 need.Version,
                                 need.ReviewedBy ?? "⚠️ " + (need.OldVersion == null ? "NEW" : "Upd. from " + need.OldVersion));
-                            
-                            anyUnreviewed |= need.ReviewedBy == null;
+
+                            if (need.ReviewedBy == null)
+                                numUnreviewed++;
                         }
                         
                         needsText = 
-                            "\n\n<details>\n<summary>Needs " + 
-                            (anyUnreviewed ? "(UNREVIEWED)" : "(All reviewed)") +
+                            $"\n\n<details>\n<summary>{allNeeds.Count} Needs " + 
+                            (numUnreviewed > 0 ? $"(⚠️ {numUnreviewed} UNREVIEWED)" : "(✅ All reviewed)") +
                             "</summary>\n\n" + needsTable.GetText() +
                             "</details>\n\n";
                     }

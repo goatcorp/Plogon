@@ -876,7 +876,7 @@ public class BuildProcessor
     /// Check out and build a plugin from a task
     /// </summary>
     /// <param name="task">The task to build</param>
-    /// <param name="commit">Whether or not the plugin should be committed to the repo</param>
+    /// <param name="commit">Whether the plugin should be committed to the repo</param>
     /// <param name="changelog">The plugin changelog</param>
     /// <param name="otherTasks">All other queued tasks</param>
     /// <returns>The result of the build</returns>
