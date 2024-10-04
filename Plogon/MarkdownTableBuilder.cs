@@ -29,7 +29,7 @@ public class MarkdownTableBuilder
 
     public string GetText(bool noTable = false, bool discord = false)
     {
-        if (rows.Count == 1 || noTable)
+        if (noTable)
         {
             var text = rows.Aggregate(string.Empty,
                 (text, row) => text += row.Aggregate((rowtext, col) => rowtext + $"{col} - ")[..^3] + "\n");
