@@ -507,6 +507,7 @@ class Program
                     if (allNeeds.Count > 0)
                     {
                         var numUnreviewed = 0;
+                        var numHidden = 0;
                         var needsTable = MarkdownTableBuilder.Create("Type", "Name", "Version", "Reviewed by");
                         foreach (var need in allNeeds.OrderByDescending(x => x.ReviewedBy == null))
                         {
@@ -514,7 +515,10 @@ class Program
                             if (need.Type == State.Need.NeedType.NuGet)
                             {
                                 if (PlogonSystemDefine.SafeNugetNamespaces.Any(x => name.StartsWith(x)))
+                                {
+                                    numHidden++;
                                     continue;
+                                }
                                 
                                 name = $"[{need.Name}](https://www.nuget.org/packages/{need.Name})";
                             }
@@ -528,11 +532,15 @@ class Program
                             if (need.ReviewedBy == null)
                                 numUnreviewed++;
                         }
+
+                        var hiddenText = string.Empty;
+                        if (numHidden > 0)
+                            hiddenText = $"\n\n##### {numHidden} hidden needs (known safe NuGet packages).\n";
                         
                         needsText = 
                             $"\n\n<details>\n<summary>{allNeeds.Count} Needs " + 
                             (numUnreviewed > 0 ? $"(⚠️ {numUnreviewed} UNREVIEWED)" : "(✅ All reviewed)") +
-                            "</summary>\n\n" + needsTable.GetText() +
+                            "</summary>\n\n" + needsTable.GetText() + hiddenText +
                             "</details>\n\n";
                     }
                     
