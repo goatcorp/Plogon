@@ -542,6 +542,9 @@ class Program
                             (numUnreviewed > 0 ? $"(⚠️ {numUnreviewed} UNREVIEWED)" : "(✅ All reviewed)") +
                             "</summary>\n\n" + needsTable.GetText() + hiddenText +
                             "</details>\n\n";
+                        
+                        if (numHidden == allNeeds.Count)
+                            needsText = hiddenText;
                     }
                     
                     var commentTask = gitHubApi?.AddComment(parsedPrNum,
