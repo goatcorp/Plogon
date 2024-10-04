@@ -37,7 +37,11 @@ public static class PlogonSystemDefine
         "System.Reactive",
         "System.Text.Json",
         "System.Text.Encodings",
+        "System.Drawing.Common",
         "Newtonsoft.Json",
+        "JetBrains.Annotations",
+        "System.Runtime.CompilerServices.Unsafe",
+        "Microsoft.Extensions."
     ];
     
     /// <summary>
