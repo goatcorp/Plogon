@@ -105,7 +105,7 @@ public class PluginRepository
     /// Update the have commit on the repo
     /// </summary>
     /// <param name="channelName">The name of the channel</param>
-    /// <param name="plugin">The internalname of the plugin</param>
+    /// <param name="internalName">The internalname of the plugin</param>
     /// <param name="haveCommit">Commit that is now have</param>
     /// <param name="effectiveVersion">New version of the plugin</param>
     /// <param name="minimumVersion">Minimum version Dalamud should still try to load.</param>
@@ -114,7 +114,7 @@ public class PluginRepository
     /// <param name="needs">Needs we had for this version</param>
     public void UpdatePluginHave(
         string channelName,
-        string plugin,
+        string internalName,
         string haveCommit,
         string effectiveVersion,
         string? minimumVersion,
@@ -129,7 +129,7 @@ public class PluginRepository
 
         var channel = this.State.Channels[channelName];
 
-        if (channel.Plugins.TryGetValue(plugin, out var pluginState))
+        if (channel.Plugins.TryGetValue(internalName, out var pluginState))
         {
             pluginState.BuiltCommit = haveCommit;
             pluginState.TimeBuilt = DateTime.Now;
@@ -145,14 +145,18 @@ public class PluginRepository
                 EffectiveVersion = effectiveVersion,
                 MinimumVersion = minimumVersion,
             };
-            channel.Plugins[plugin] = pluginState;
+            channel.Plugins[internalName] = pluginState;
         }
 
         pluginState.Changelogs[effectiveVersion] = new State.Channel.PluginState.PluginChangelog
         {
             Changelog = changelog,
             TimeReleased = DateTime.Now,
-            UsedNeeds = needs.Select(x => new State.Channel.PluginState.PluginChangelog.UsedNeed(x.Key, x.Version)).ToList(),
+            UsedNeeds = needs.Select(x => new State.Channel.PluginState.PluginChangelog.UsedNeed
+            {
+                Key = x.Key,
+                Version = x.Version,
+            }).ToList(),
             Reviewer = reviewer,
         };
 

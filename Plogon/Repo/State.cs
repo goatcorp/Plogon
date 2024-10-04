@@ -42,8 +42,12 @@ public class State
             {
                 public DateTime TimeReleased { get; set; }
                 public string? Changelog { get; set; }
-                
-                public record UsedNeed(string Key, string Version);
+
+                public class UsedNeed
+                {
+                    public string Key { get; set; }
+                    public string Version { get; set; }
+                }
 
                 public List<UsedNeed>? UsedNeeds { get; set; }
 

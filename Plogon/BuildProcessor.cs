@@ -1147,7 +1147,7 @@ public class BuildProcessor
                         task.Channel,
                         task.InternalName,
                         task.Manifest.Plugin.Commit,
-                        version!,
+                        version ?? throw new Exception("Committing, but version is null"),
                         task.Manifest.Plugin.MinimumVersion,
                         changelog,
                         this.actor ?? throw new Exception("Committing, but actor is null"),
