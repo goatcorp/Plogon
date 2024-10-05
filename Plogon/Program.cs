@@ -522,12 +522,21 @@ class Program
                                 
                                 name = $"[{need.Name}](https://www.nuget.org/packages/{need.Name})";
                             }
+
+                            var unreviewedText = "NEW";
+                            if (need.OldVersion != null)
+                            {
+                                unreviewedText = $"Upd. from {need.OldVersion}";
+                                
+                                if (need.DiffUrl != null)
+                                    unreviewedText += $"[{unreviewedText}]({need.DiffUrl}))";
+                            }
                             
                             needsTable.AddRow(
                                 need.Type.ToString(),
                                 name,
                                 need.Version,
-                                need.ReviewedBy ?? "⚠️ " + (need.OldVersion == null ? "NEW" : "Upd. from " + need.OldVersion));
+                                need.ReviewedBy ?? "⚠️ " + unreviewedText);
 
                             if (need.ReviewedBy == null)
                                 numUnreviewed++;

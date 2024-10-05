@@ -1286,16 +1286,28 @@ public class BuildProcessor
                                  .FirstOrDefault(x => string.Equals(x.Key, key, StringComparison.Ordinal) &&
                                                       string.Equals(x.Version, version, StringComparison.Ordinal));
 
-        // TODO: Diff submodules?
-        
         if (existingReview == null)
         {
             var lastReview = this.pluginRepository.State.ReviewedNeeds
                                  .Where(x => string.Equals(x.Key, key, StringComparison.Ordinal))
                                  .OrderByDescending(x => x.ReviewedAt)
                                  .FirstOrDefault();
+
+            string? diffUrl = null;
+            if (type == State.Need.NeedType.Submodule && lastReview != null)
+            {
+                if (Uri.TryCreate(key, UriKind.Absolute, out var uri) && uri.Host == "github.com")
+                {
+                    var parts = uri.AbsolutePath.Split('/');
+                    if (parts.Length >= 3)
+                    {
+                        diffUrl =
+                            $"https://{uri.Host}/{parts[1]}/{parts[2]}/compare/{lastReview.Version}...{version}";
+                    }
+                }
+            }
             
-            return new(key, null, version, lastReview?.Version, null, type);
+            return new(key, null, version, lastReview?.Version, diffUrl, type);
         }
         
         return new(key, existingReview.ReviewedBy, version, existingReview.Version, null, type);
