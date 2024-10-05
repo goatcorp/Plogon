@@ -89,11 +89,16 @@ class Program
         var repoParts = Environment.GetEnvironmentVariable("GITHUB_REPOSITORY")?.Split("/");
         var repoOwner = repoParts?[0];
         var repoName = repoParts?[1];
-        var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
-
-        if (mode == ModeOfOperation.PullRequest && string.IsNullOrEmpty(prNumber))
-            throw new Exception("PR number not set");
         
+        var prNumberStr = Environment.GetEnvironmentVariable("GITHUB_PR_NUM");
+        int? prNumber = mode switch
+        {
+            ModeOfOperation.PullRequest when string.IsNullOrEmpty(prNumberStr) => throw new Exception(
+                "PR number not set"),
+            ModeOfOperation.PullRequest => int.Parse(prNumberStr),
+            _ => null
+        };
+
         GitHubApi? gitHubApi = null;
         if (ci)
         {
@@ -134,7 +139,7 @@ class Program
             string? prDiff = null;
             if (gitHubApi is not null && repoName is not null && prNumber is not null)
             {
-                prDiff = await gitHubApi.GetPullRequestDiff(prNumber);
+                prDiff = await gitHubApi.GetPullRequestDiff(prNumber.Value);
             }
             else if (mode == ModeOfOperation.PullRequest)
             {
@@ -155,7 +160,6 @@ class Program
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
                 S3Client = s3Client,
-                GitHubActor = githubActor,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
@@ -169,6 +173,7 @@ class Program
 
             var buildProcessor = new BuildProcessor(setup);
             var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
+            var taskToPrNumber = new Dictionary<BuildTask, int>();
 
             GitHubOutputBuilder.StartGroup("List all tasks");
 
@@ -252,7 +257,7 @@ class Program
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
-                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, tasks);
+                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, null, tasks);
                             allResults.Add(removeStatus);
 
                             if (removeStatus.Success)
@@ -292,14 +297,27 @@ class Program
 
                         numTried++;
 
+                        string? reviewer = null;
                         var changelog = task.Manifest.Plugin.Changelog;
-                        if (string.IsNullOrEmpty(changelog) && repoName != null && prNumber != null &&
-                            gitHubApi != null && mode == ModeOfOperation.Commit)
+                        int? committingPrNum = null;
+
+                        if (mode == ModeOfOperation.Commit)
                         {
-                            changelog = await gitHubApi.GetIssueBody(int.Parse(prNumber));
+                            committingPrNum =
+                                await webservices.GetPrNumber(task.InternalName, task.Manifest!.Plugin.Commit)
+                                ?? throw new Exception($"No PR number for commit ({task.InternalName}, {task.Manifest.Plugin.Commit})");
+                            taskToPrNumber.Add(task, committingPrNum.Value);
+
+                            if (string.IsNullOrEmpty(changelog))
+                            {
+                                changelog = await gitHubApi!.GetIssueBody(committingPrNum.Value);
+                            }
+                            
+                            reviewer = await gitHubApi!.GetReviewer(committingPrNum.Value);
+                            Log.Information("Reviewer for {InternalName} ({PrNum}): {Reviewer}", task.InternalName, committingPrNum.Value, reviewer);
                         }
 
-                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, tasks);
+                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, tasks);
                         allResults.Add(buildResult);
 
                         var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;
@@ -308,7 +326,6 @@ class Program
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
                                 task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", buildResult.Diff?.LinesAdded ?? -1, buildResult.Diff?.LinesRemoved ?? -1);
-
 
                             var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
                             var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
@@ -339,9 +356,11 @@ class Program
                                 }
                             }
 
-                            if (!string.IsNullOrEmpty(prNumber) && mode == ModeOfOperation.PullRequest)
+                            if (mode == ModeOfOperation.PullRequest)
+                            {
                                 await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
-                                    prNumber);
+                                                                   prNumber ?? throw new Exception("No PR number"));
+                            }
 
                             if (buildResult.Diff != null)
                             {
@@ -362,19 +381,14 @@ class Program
 
                             if (mode == ModeOfOperation.Commit)
                             {
-                                int? prInt = null;
-                                if (int.TryParse(
-                                        await webservices.GetPrNumber(task.InternalName, task.Manifest.Plugin.Commit),
-                                        out var commitPrNum))
+                                if (committingPrNum == null)
+                                    throw new Exception("No PR number for commit");
+                                
+                                // Let's try getting the changelog again here in case we didn't get it the first time around
+                                if (string.IsNullOrEmpty(changelog) && repoName != null &&
+                                    gitHubApi != null)
                                 {
-                                    // Let's try again here in case we didn't get it the first time around
-                                    if (string.IsNullOrEmpty(changelog) && repoName != null &&
-                                        gitHubApi != null)
-                                    {
-                                        changelog = await gitHubApi.GetIssueBody(commitPrNum);
-                                    }
-
-                                    prInt = commitPrNum;
+                                    changelog = await gitHubApi.GetIssueBody(committingPrNum.Value);
                                 }
 
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
@@ -382,7 +396,7 @@ class Program
                                     InternalName = task.InternalName,
                                     Version = buildResult.Version!,
                                     Dip17Track = task.Channel,
-                                    PrNumber = prInt,
+                                    PrNumber = committingPrNum.Value,
                                     Changelog = changelog,
                                     IsInitialRelease = task.IsNewPlugin,
                                     DiffLinesAdded = buildResult.Diff?.LinesAdded,
@@ -465,7 +479,10 @@ class Program
 
                 if (mode == ModeOfOperation.PullRequest)
                 {
-                    var existingMessages = await webservices.GetMessageIds(prNumber!);
+                    if (prNumber == null)
+                        throw new Exception("PR number not set");
+                    
+                    var existingMessages = await webservices.GetMessageIds(prNumber.Value);
                     var alreadyPosted = existingMessages.Length > 0;
 
                     var links =
@@ -477,10 +494,8 @@ class Program
                     if (!anyTried)
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
-
-                    var parsedPrNum = int.Parse(prNumber!);
-
-                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(parsedPrNum);
+                    
+                    var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNumber.Value);
 
                     var anyComments = true;
                     if (crossOutTask != null)
@@ -556,7 +571,7 @@ class Program
                             needsText = hiddenText;
                     }
                     
-                    var commentTask = gitHubApi?.AddComment(parsedPrNum,
+                    var commentTask = gitHubApi?.AddComment(prNumber.Value,
                         commentText + mergeTimeText + "\n\n" + buildsMd + needsText + "\n##### " + links);
 
                     if (commentTask != null)
@@ -569,7 +584,7 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(parsedPrNum);
+                        var prDesc = await gitHubApi!.GetIssueBody(prNumber.Value);
                         if (!string.IsNullOrEmpty(prDesc))
                             buildInfo += $"```\n{prDesc}\n```\n";
                     }
@@ -592,14 +607,14 @@ class Program
                     var id = await publicChannelWebhook.Send(ok ? Color.Purple : Color.Red,
                         $"{buildInfo}\n\n{links} - [PR](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber})",
                         hookTitle, ok ? "Accepted" : "Rejected");
-                    await webservices.RegisterMessageId(prNumber!, id);
+                    await webservices.RegisterMessageId(prNumber.Value, id);
 
                     if (gitHubApi != null)
-                        await gitHubApi.SetPrLabels(parsedPrNum, prLabels);
+                        await gitHubApi.SetPrLabels(prNumber.Value, prLabels);
 
                     if (prLabels.HasFlag(GitHubApi.PrLabel.NewPlugin) && gitHubApi != null)
                     {
-                        await DoPacRoundRobinAssign(gitHubApi, parsedPrNum);
+                        await DoPacRoundRobinAssign(gitHubApi, prNumber.Value);
                     }
                 }
 
@@ -618,13 +633,9 @@ class Program
                         if (!buildResult.Success && !aborted)
                             continue;
 
-                        var resultPrNum =
-                            await webservices.GetPrNumber(buildResult.Task.InternalName, buildResult.Task.Manifest!.Plugin.Commit);
-                        if (resultPrNum == null)
+                        if (!taskToPrNumber.TryGetValue(buildResult.Task, out var resultPrNum))
                         {
-                            Log.Warning("No PR for {InternalName} - {Version}", buildResult.Task.InternalName,
-                                buildResult.Version);
-                            continue;
+                            throw new Exception($"No PR number for commit {buildResult.Task.InternalName} - {buildResult.Task.Manifest!.Plugin.Commit}");
                         }
 
                         try

@@ -30,7 +30,7 @@ public class WebServices
     /// </summary>
     /// <param name="prNumber"></param>
     /// <param name="messageId"></param>
-    public async Task RegisterMessageId(string prNumber, ulong messageId)
+    public async Task RegisterMessageId(int prNumber, ulong messageId)
     {
         if (this.key is null) return;
 
@@ -46,16 +46,16 @@ public class WebServices
     /// </summary>
     /// <param name="prNumber"></param>
     /// <returns></returns>
-    public async Task<string[]> GetMessageIds(string prNumber)
+    public async Task<string[]> GetMessageIds(int prNumber)
     {
-        if (this.key is null) return Array.Empty<string>();
+        if (this.key is null) return [];
 
         using var client = new HttpClient();
         var result = await client.GetAsync(
             $"https://kamori.goats.dev/Plogon/GetMessageIds?prNumber={prNumber}");
         result.EnsureSuccessStatusCode();
 
-        return await result.Content.ReadFromJsonAsync<string[]>() ?? Array.Empty<string>();
+        return await result.Content.ReadFromJsonAsync<string[]>() ?? [];
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ public class WebServices
     /// <param name="internalName"></param>
     /// <param name="version"></param>
     /// <param name="prNumber"></param>
-    public async Task RegisterPrNumber(string internalName, string version, string prNumber)
+    public async Task RegisterPrNumber(string internalName, string version, int prNumber)
     {
         if (this.key is null) return;
 
@@ -83,7 +83,7 @@ public class WebServices
     /// <param name="internalName"></param>
     /// <param name="version"></param>
     /// <returns></returns>
-    public async Task<string?> GetPrNumber(string internalName, string version)
+    public async Task<int?> GetPrNumber(string internalName, string version)
     {
         if (this.key is null) return null;
 
@@ -97,7 +97,7 @@ public class WebServices
         var text = await result.Content.ReadAsStringAsync();
         result.EnsureSuccessStatusCode();
 
-        return text;
+        return int.Parse(text);
     }
 
     public class StagedPluginInfo

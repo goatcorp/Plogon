@@ -52,8 +52,6 @@ public class BuildProcessor
     private readonly DockerClient dockerClient;
 
     private readonly IAmazonS3? s3Client;
-
-    private readonly string? actor;
     
     private static readonly string[] DalamudInternalDll = new[]
     {
@@ -174,11 +172,6 @@ public class BuildProcessor
         /// S3 client to use for artifact uploads.
         /// </summary>
         public IAmazonS3? S3Client { get; set; }
-        
-        /// <summary>
-        /// Actor of the GitHub action that triggered this build. Null in non-ci builds.
-        /// </summary>
-        public string? GitHubActor { get; set; }
     }
 
     /// <summary>
@@ -202,8 +195,6 @@ public class BuildProcessor
         this.dockerClient = new DockerClientConfiguration().CreateClient();
 
         this.s3Client = setup.S3Client;
-        
-        this.actor = setup.GitHubActor;
     }
 
     /// <summary>
@@ -878,12 +869,16 @@ public class BuildProcessor
     /// <param name="task">The task to build</param>
     /// <param name="commit">Whether the plugin should be committed to the repo</param>
     /// <param name="changelog">The plugin changelog</param>
+    /// <param name="reviewer">Reviewer of this task</param>
     /// <param name="otherTasks">All other queued tasks</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, ISet<BuildTask> otherTasks)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, ISet<BuildTask>? otherTasks)
     {
+        if (commit && string.IsNullOrWhiteSpace(reviewer))
+            throw new Exception("Reviewer must be set when committing");
+        
         if (task.Type == BuildTask.TaskType.Remove)
         {
             if (!commit)
@@ -1150,10 +1145,10 @@ public class BuildProcessor
                         version ?? throw new Exception("Committing, but version is null"),
                         task.Manifest.Plugin.MinimumVersion,
                         changelog,
-                        this.actor ?? throw new Exception("Committing, but actor is null"),
+                        reviewer!,
                         allNeeds.Select(x => (x.Name, x.Version)));
                     
-                    this.CommitReviewedNeeds(allNeeds);
+                    this.CommitReviewedNeeds(allNeeds, reviewer!);
 
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 
@@ -1313,7 +1308,7 @@ public class BuildProcessor
         return new(key, existingReview.ReviewedBy, version, existingReview.Version, null, type);
     }
     
-    private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs)
+    private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs, string reviewer)
     {
         var newNeeds = needs
                        .Where(need => need.ReviewedBy == null)
@@ -1321,7 +1316,7 @@ public class BuildProcessor
                            need => new State.Need
                            {
                                Key = need.Name,
-                               ReviewedBy = this.actor ?? throw new Exception("Committing, but reviewer is null"),
+                               ReviewedBy = reviewer,
                                Version = need.Version,
                                ReviewedAt = DateTime.UtcNow,
                                Type = need.Type,

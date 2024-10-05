@@ -95,7 +95,7 @@ public class GitHubApi
     /// </summary>
     /// <param name="prNum">The pull request number</param>
     /// <returns></returns>
-    public async Task<string> GetPullRequestDiff(string prNum)
+    public async Task<string> GetPullRequestDiff(int prNum)
     {
         using var client = new HttpClient();
         return await client.GetStringAsync($"https://github.com/{repoOwner}/{repoName}/pull/{prNum}.diff");
@@ -114,6 +114,26 @@ public class GitHubApi
             throw new Exception("Could not get PR");
 
         return pr.Body;
+    }
+    
+    /// <summary>
+    /// Get the username of the first approving reviewer of a PR.
+    /// </summary>
+    /// <param name="issueNumber"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    public async Task<string> GetReviewer(int issueNumber)
+    {
+        var reviews = await this.ghClient.PullRequest.Review.GetAll(repoOwner, repoName, issueNumber);
+        if (reviews == null)
+            throw new Exception("Could not get reviews");
+
+        var firstApprovingReview = reviews.FirstOrDefault(r => r.State == PullRequestReviewState.Approved &&
+                                                               PlogonSystemDefine.PacMembers.Contains(r.User.Login));
+        if (firstApprovingReview == null)
+            throw new Exception($"No approving reviews on PR {issueNumber}");
+
+        return firstApprovingReview.User.Login;
     }
 
     /// <summary>
