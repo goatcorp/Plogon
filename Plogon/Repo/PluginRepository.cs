@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 
 using Serilog;
-
-using Tomlyn;
 
 namespace Plogon.Repo;
 
@@ -15,7 +14,7 @@ namespace Plogon.Repo;
 public class PluginRepository
 {
     private readonly DirectoryInfo repoDirectory;
-    private FileInfo StateFile => new FileInfo(Path.Combine(repoDirectory.FullName, "State.toml"));
+    private FileInfo StateFile => new FileInfo(Path.Combine(repoDirectory.FullName, "state.json"));
 
     /// <summary>
     /// Current state of the repository
@@ -32,7 +31,8 @@ public class PluginRepository
 
         if (StateFile.Exists)
         {
-            this.State = Toml.ToModel<State>(StateFile.OpenText().ReadToEnd());
+            this.State = JsonSerializer.Deserialize<State>(StateFile.OpenText().ReadToEnd())
+                ?? throw new Exception("Failed to load state");
         }
         else
         {
@@ -43,7 +43,10 @@ public class PluginRepository
 
     private void SaveState()
     {
-        File.WriteAllText(this.StateFile.FullName, Toml.FromModel(this.State));
+        File.WriteAllText(this.StateFile.FullName, JsonSerializer.Serialize(this.State, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+        }));
     }
 
     /// <summary>
