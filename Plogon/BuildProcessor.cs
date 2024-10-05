@@ -1315,16 +1315,20 @@ public class BuildProcessor
     
     private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs)
     {
-        this.pluginRepository.AddReviewedNeeds(needs
-            .Where(need => need.ReviewedBy != null)
-            .Select(need => new State.Need
-            {
-                Key = need.Name,
-                ReviewedBy = this.actor ?? throw new Exception("Committing, but reviewer is null"),
-                Version = need.Version,
-                ReviewedAt = DateTime.UtcNow,
-                Type = need.Type,
-            }));
+        var newNeeds = needs
+                       .Where(need => need.ReviewedBy != null)
+                       .Select(
+                           need => new State.Need
+                           {
+                               Key = need.Name,
+                               ReviewedBy = this.actor ?? throw new Exception("Committing, but reviewer is null"),
+                               Version = need.Version,
+                               ReviewedAt = DateTime.UtcNow,
+                               Type = need.Type,
+                           }).ToList();
+        
+        Log.Information("Adding {Count} newly reviewed needs to repo state", newNeeds.Count);
+        this.pluginRepository.AddReviewedNeeds(newNeeds);
     }
     
     private static void CopySourceForArchive(DirectoryInfo from, DirectoryInfo to, int depth = 0)
