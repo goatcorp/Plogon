@@ -1316,7 +1316,7 @@ public class BuildProcessor
     private void CommitReviewedNeeds(IEnumerable<BuildResult.ReviewedNeed> needs)
     {
         var newNeeds = needs
-                       .Where(need => need.ReviewedBy != null)
+                       .Where(need => need.ReviewedBy == null)
                        .Select(
                            need => new State.Need
                            {
