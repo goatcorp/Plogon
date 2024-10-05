@@ -874,7 +874,7 @@ public class BuildProcessor
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, ISet<BuildTask>? otherTasks)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, ISet<BuildTask> otherTasks)
     {
         if (commit && string.IsNullOrWhiteSpace(reviewer))
             throw new Exception("Reviewer must be set when committing");
