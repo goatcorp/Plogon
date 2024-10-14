@@ -371,7 +371,7 @@ public class BuildProcessor
         }
     }
 
-    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo projectPath, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
+    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo? projectPath, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
         var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
@@ -392,7 +392,7 @@ public class BuildProcessor
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
 
-            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds, file.Directory?.FullName == projectPath.FullName);
+            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds, projectPath == null || file.Directory?.FullName == projectPath.FullName);
         }
 
         // fetch runtime packages
@@ -966,7 +966,7 @@ public class BuildProcessor
 
         WriteNugetConfig(new FileInfo(Path.Combine(workDir.FullName, "nuget.config")));
 
-        var projectPath = new DirectoryInfo(Path.Combine(workDir.FullName, task.Manifest.Plugin.ProjectPath));
+        var projectPath = task.Manifest.Plugin.ProjectPath != null ? new DirectoryInfo(Path.Combine(workDir.FullName, task.Manifest.Plugin.ProjectPath)) : null;
 
         await RetryUntil(async () => await GetNeeds(task, externalNeedsDir, allNeeds));
         await RetryUntil(async () => await RestoreAllPackages(workDir, projectPath, packagesDir, allNeeds));
