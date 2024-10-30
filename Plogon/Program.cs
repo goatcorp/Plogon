@@ -248,9 +248,49 @@ class Program
 
                     try
                     {
+                        string? reviewer = null;
+                        var changelog = task.Manifest?.Plugin.Changelog;
+                        int? committingPrNum = null;
+
+                        var relevantCommitHashForWebServices = task.Manifest?.Plugin.Commit;
+                        
+                        // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
                         if (task.Type == BuildTask.TaskType.Remove)
                         {
-                            // If we are not committing, removal tasks don't do anything and we should not consider them
+                            relevantCommitHashForWebServices = task.HaveCommit;
+                        }
+
+                        if (string.IsNullOrEmpty(relevantCommitHashForWebServices))
+                        {
+                            throw new Exception("No valid commit hash for task");
+                        }
+                        
+                        // When committing: Get the PR number for the merge to the manifest repo, and get the first approving reviewer
+                        if (mode == ModeOfOperation.Commit)
+                        {
+                            committingPrNum =
+                                await webservices.GetPrNumber(task.InternalName, relevantCommitHashForWebServices)
+                                ?? throw new Exception($"No PR number for commit ({task.InternalName}, {relevantCommitHashForWebServices})");
+                            taskToPrNumber.Add(task, committingPrNum.Value);
+
+                            if (string.IsNullOrEmpty(changelog))
+                            {
+                                changelog = await gitHubApi!.GetIssueBody(committingPrNum.Value);
+                            }
+                            
+                            reviewer = await gitHubApi!.GetReviewer(committingPrNum.Value);
+                            Log.Information("Reviewer for {InternalName} ({PrNum}): {Reviewer}", task.InternalName, committingPrNum.Value, reviewer);
+                        }
+                        // When building a PR: Register the PR number for the plugin with webservices so that we know what plugin update came from what PR
+                        else if (mode == ModeOfOperation.PullRequest)
+                        {
+                            await webservices.RegisterPrNumber(task.InternalName, relevantCommitHashForWebServices,
+                                                               prNumber ?? throw new Exception("No PR number"));
+                        }
+                        
+                        if (task.Type == BuildTask.TaskType.Remove)
+                        {
+                            // If we are not committing, removal tasks don't do anything, and we should not consider them
                             if (mode != ModeOfOperation.Commit)
                                 continue;
 
@@ -297,26 +337,6 @@ class Program
 
                         numTried++;
 
-                        string? reviewer = null;
-                        var changelog = task.Manifest.Plugin.Changelog;
-                        int? committingPrNum = null;
-
-                        if (mode == ModeOfOperation.Commit)
-                        {
-                            committingPrNum =
-                                await webservices.GetPrNumber(task.InternalName, task.Manifest!.Plugin.Commit)
-                                ?? throw new Exception($"No PR number for commit ({task.InternalName}, {task.Manifest.Plugin.Commit})");
-                            taskToPrNumber.Add(task, committingPrNum.Value);
-
-                            if (string.IsNullOrEmpty(changelog))
-                            {
-                                changelog = await gitHubApi!.GetIssueBody(committingPrNum.Value);
-                            }
-                            
-                            reviewer = await gitHubApi!.GetReviewer(committingPrNum.Value);
-                            Log.Information("Reviewer for {InternalName} ({PrNum}): {Reviewer}", task.InternalName, committingPrNum.Value, reviewer);
-                        }
-
                         var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, tasks);
                         allResults.Add(buildResult);
 
@@ -354,12 +374,6 @@ class Program
                                     buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
                                         $"v{buildResult.Version} - {diffLink}");
                                 }
-                            }
-
-                            if (mode == ModeOfOperation.PullRequest)
-                            {
-                                await webservices.RegisterPrNumber(task.InternalName, task.Manifest.Plugin.Commit,
-                                                                   prNumber ?? throw new Exception("No PR number"));
                             }
 
                             if (buildResult.Diff != null)
