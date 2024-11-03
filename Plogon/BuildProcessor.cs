@@ -353,7 +353,7 @@ public class BuildProcessor
         return need;
     }
 
-    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
+    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client, HashSet<BuildResult.ReviewedNeed> reviewedNeeds, bool includeInReview)
     {
         foreach (var runtime in lockFileData.Runtimes)
         {
@@ -363,12 +363,15 @@ public class BuildProcessor
                 .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
                 .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder, client)).ToList());
 
-            foreach (var reviewedNeed in resultNeeds)
-                reviewedNeeds.Add(reviewedNeed);
+            if (includeInReview)
+            {
+                foreach (var reviewedNeed in resultNeeds)
+                    reviewedNeeds.Add(reviewedNeed);
+            }
         }
     }
 
-    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
+    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo? projectPath, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
         var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
@@ -389,7 +392,7 @@ public class BuildProcessor
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
 
-            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds);
+            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds, projectPath == null || file.Directory?.FullName == projectPath.FullName);
         }
 
         // fetch runtime packages
@@ -951,21 +954,23 @@ public class BuildProcessor
 
         // Archive source code before build
         CopySourceForArchive(workDir, archiveDir);
-        
+
         // Create archive zip
         var archiveZipFile =
             new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archiveDir.Name}.zip"));
         ZipFile.CreateFromDirectory(archiveDir.FullName, archiveZipFile.FullName);
-        
+
         var diff = await GetPluginDiff(workDir, task, otherTasks, !commit);
 
         var dalamudAssemblyDir = await this.dalamudReleases.GetDalamudAssemblyDirAsync(task.Channel);
 
         WriteNugetConfig(new FileInfo(Path.Combine(workDir.FullName, "nuget.config")));
-        
+
+        var projectPath = task.Manifest.Plugin.ProjectPath != null ? new DirectoryInfo(Path.Combine(workDir.FullName, task.Manifest.Plugin.ProjectPath)) : null;
+
         await RetryUntil(async () => await GetNeeds(task, externalNeedsDir, allNeeds));
-        await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir, allNeeds));
-        
+        await RetryUntil(async () => await RestoreAllPackages(workDir, projectPath, packagesDir, allNeeds));
+
         var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
 
         var dockerEnv = new List<string>
