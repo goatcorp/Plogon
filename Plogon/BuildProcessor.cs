@@ -69,7 +69,7 @@ public class BuildProcessor
     private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "8.0";
+    private const string DOCKER_TAG = "8.0.404";
 
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
@@ -100,7 +100,7 @@ public class BuildProcessor
     {
         { "Dalamud.NET.Sdk", new[]
             // This should have all the SDK packages we still support.
-            { "9.0.2", "10.0.0" }
+            { "11.0.0" }
         },
     };
 
