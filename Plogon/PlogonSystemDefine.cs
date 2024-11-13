@@ -83,4 +83,19 @@ public static class PlogonSystemDefine
     /// Label for large PRs.
     /// </summary>
     public const string PR_LABEL_SIZE_LARGE = "size-large";
+    
+    /// <summary>
+    /// PR label for a plugin pending code review.
+    /// </summary>
+    public const string PR_LABEL_PENDING_CODE_REVIEW = "pending-code-review";
+    
+    /// <summary>
+    /// PR label for a plugin pending rules compliance.
+    /// </summary>
+    public const string PR_LABEL_PENDING_RULES_COMPLIANCE = "pending-rules-compliance";
+    
+    /// <summary>
+    /// PR label for a plugin pending testing.
+    /// </summary>
+    public const string PR_LABEL_PENDING_TESTING = "pending-testing";
 }

@@ -205,7 +205,22 @@ public class GitHubApi
         /// <summary>
         /// "size-l"
         /// </summary>
-        SizeLarge = 1 << 7
+        SizeLarge = 1 << 7,
+        
+        /// <summary>
+        /// "pending-rules-compliance"
+        /// </summary>
+        PendingRulesCompliance = 1 << 8,
+        
+        /// <summary>
+        /// "pending-testing"
+        /// </summary>
+        PendingTesting = 1 << 9,
+        
+        /// <summary>
+        /// "pending-code-review"
+        /// </summary>
+        PendingCodeReview = 1 << 10,
     }
 
     /// <summary>
@@ -265,6 +280,21 @@ public class GitHubApi
             managedLabels.Add(PlogonSystemDefine.PR_LABEL_SIZE_LARGE);
         else
             managedLabels.Remove(PlogonSystemDefine.PR_LABEL_SIZE_LARGE);
+        
+        if (label.HasFlag(PrLabel.PendingCodeReview))
+            managedLabels.Add(PlogonSystemDefine.PR_LABEL_PENDING_CODE_REVIEW);
+        else
+            managedLabels.Remove(PlogonSystemDefine.PR_LABEL_PENDING_CODE_REVIEW);
+        
+        if (label.HasFlag(PrLabel.PendingRulesCompliance))
+            managedLabels.Add(PlogonSystemDefine.PR_LABEL_PENDING_RULES_COMPLIANCE);
+        else
+            managedLabels.Remove(PlogonSystemDefine.PR_LABEL_PENDING_RULES_COMPLIANCE);
+        
+        if (label.HasFlag(PrLabel.PendingTesting))
+            managedLabels.Add(PlogonSystemDefine.PR_LABEL_PENDING_TESTING);
+        else
+            managedLabels.Remove(PlogonSystemDefine.PR_LABEL_PENDING_TESTING);
 
         await this.ghClient.Issue.Labels.ReplaceAllForIssue(repoOwner, repoName, issueNumber, managedLabels.ToArray());
     }
