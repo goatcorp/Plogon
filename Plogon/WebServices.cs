@@ -73,7 +73,6 @@ public class WebServices
             $"https://kamori.goats.dev/Plogon/RegisterVersionPrNumber?key={this.key}&prNumber={prNumber}&internalName={internalName}&version={version}",
             null);
 
-        Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
 
@@ -122,7 +121,6 @@ public class WebServices
             $"https://kamori.goats.dev/Plogon/StagePluginBuild",
             JsonContent.Create(info));
 
-        Log.Information(await result.Content.ReadAsStringAsync());
         result.EnsureSuccessStatusCode();
     }
 
