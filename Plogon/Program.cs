@@ -563,7 +563,7 @@ class Program
                                 unreviewedText = $"Upd. from {need.OldVersion}";
                                 
                                 if (need.DiffUrl != null)
-                                    unreviewedText += $"[{unreviewedText}]({need.DiffUrl}))";
+                                    unreviewedText = $"[{unreviewedText}]({need.DiffUrl}))";
                             }
                             
                             needsTable.AddRow(
