@@ -1057,7 +1057,7 @@ public class BuildProcessor
                 eof = result.EOF;
 
                 var log = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
-                Log.Information(log.Replace("\n", string.Empty));
+                Log.Information("[CONTAINER] {Log}", log.Replace("\n", string.Empty));
             }
         }
 
