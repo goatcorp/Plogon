@@ -1296,8 +1296,12 @@ public class BuildProcessor
                     var parts = uri.AbsolutePath.Split('/');
                     if (parts.Length >= 3)
                     {
+                        var diffHost = uri.Host;
+                        if (diffHost.EndsWith(".git"))
+                            diffHost = diffHost[..^4];
+                        
                         diffUrl =
-                            $"https://{uri.Host}/{parts[1]}/{parts[2]}/compare/{lastReview.Version}...{version}";
+                            $"https://{diffHost}/{parts[1]}/{parts[2]}/compare/{lastReview.Version}...{version}";
                     }
                 }
             }
