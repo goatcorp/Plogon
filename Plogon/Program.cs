@@ -271,6 +271,7 @@ class Program
                             committingPrNum =
                                 await webservices.GetPrNumber(task.InternalName, relevantCommitHashForWebServices)
                                 ?? throw new Exception($"No PR number for commit ({task.InternalName}, {relevantCommitHashForWebServices})");
+                            Log.Verbose("PR number for {InternalName} ({Sha}): {PrNum}", task.InternalName, relevantCommitHashForWebServices, committingPrNum);
                             taskToPrNumber.Add(task, committingPrNum.Value);
 
                             if (string.IsNullOrEmpty(changelog))
