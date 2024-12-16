@@ -985,11 +985,16 @@ public class BuildProcessor
         {
             Checkout = false,
             RecurseSubmodules = false,
+            FetchOptions =
+            {
+                Depth = 1,
+            }
         });
 
         var repo = new Repository(workDir.FullName);
         Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
+            Depth = 1,
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
         
@@ -1407,6 +1412,10 @@ public class BuildProcessor
             repo.Submodules.Update(submodule.Name, new SubmoduleUpdateOptions
             {
                 Init = true,
+                FetchOptions =
+                {
+                    Depth = 1,
+                }
             });
             
             reviewedNeeds.Add(GetNeedStatus(submodule.Url, submodule.WorkDirCommitId.Sha, State.Need.NeedType.Submodule));
