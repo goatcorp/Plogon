@@ -51,7 +51,8 @@ public class BuildProcessor
 
     private readonly DockerClient dockerClient;
 
-    private readonly IAmazonS3? s3Client;
+    private readonly IAmazonS3? historyS3Client;
+    private readonly IAmazonS3? internalS3Client;
     
     private static readonly string[] DalamudInternalDll = new[]
     {
@@ -106,7 +107,8 @@ public class BuildProcessor
 
     private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
 
-    private const string S3_BUCKET_NAME = "dalamud-plugin-archive";
+    private const string HISTORY_S3_BUCKET_NAME = "dalamud-plugin-archive";
+    private const string DIFFS_S3_BUCKET_NAME = "plogon-ephemeral";
     
     /// <summary>
     /// Parameters for build processor.
@@ -171,7 +173,12 @@ public class BuildProcessor
         /// <summary>
         /// S3 client to use for artifact uploads.
         /// </summary>
-        public IAmazonS3? S3Client { get; set; }
+        public IAmazonS3? HistoryS3Client { get; set; }
+        
+        /// <summary>
+        /// S3 client used for ephemeral uploads, such as diffs.
+        /// </summary>
+        public IAmazonS3? InternalS3Client { get; set; }
     }
 
     /// <summary>
@@ -194,7 +201,8 @@ public class BuildProcessor
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
 
-        this.s3Client = setup.S3Client;
+        this.historyS3Client = setup.HistoryS3Client;
+        this.internalS3Client = setup.InternalS3Client;
     }
 
     /// <summary>
@@ -470,6 +478,30 @@ public class BuildProcessor
 
     private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks, bool doSemantic)
     {
+        async Task UploadDiffToS3(string output, string type, string contentType)
+        {
+            if (this.internalS3Client == null)
+                throw new Exception("S3 client not set up");
+            
+            var key = $"{task.InternalName}/{task.Manifest.Plugin.Commit}-{type}.diff";
+            var request = new PutObjectRequest
+            {
+                BucketName = DIFFS_S3_BUCKET_NAME,
+                Key = key,
+                ContentBody = output,
+                ContentType = contentType,
+                TagSet =
+                [
+                    new() { Key = "internalName", Value = task.InternalName },
+                    new() { Key = "channel", Value = task.Channel },
+                    new() { Key = "type", Value = type },
+                    new() { Key = "commit", Value = task.Manifest.Plugin.Commit },
+                ]
+            };
+
+            await this.internalS3Client.PutObjectAsync(request);
+        }
+        
         var internalName = task.InternalName;
         var haveCommit = task.HaveCommit;
         var wantCommit = task.Manifest!.Plugin.Commit;
@@ -536,6 +568,15 @@ public class BuildProcessor
             var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
             res.EnsureSuccessStatusCode();
 
+            try
+            {
+                await UploadDiffToS3(diffOutput, "diff", "text/plain");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to upload diff to S3");
+            }
+            
             var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
             return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
         }
@@ -569,6 +610,15 @@ public class BuildProcessor
 
             var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
             res.EnsureSuccessStatusCode();
+            
+            try
+            {
+                await UploadDiffToS3(diffOutput, "semantic", "text/html");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to upload semantic diff to S3");
+            }
 
             var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
             return $"https://haste.soulja-boy-told.me/raw/{json!.Key}.html";
@@ -1157,7 +1207,7 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
-                    if (this.s3Client != null)
+                    if (this.historyS3Client != null)
                     {
                         var key =
                             $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}.zip";
@@ -1166,7 +1216,7 @@ public class BuildProcessor
                         bool mustUpload;
                         try
                         {
-                            await this.s3Client.GetObjectMetadataAsync(S3_BUCKET_NAME, key);
+                            await this.historyS3Client.GetObjectMetadataAsync(HISTORY_S3_BUCKET_NAME, key);
                             mustUpload = false;
                         }
                         catch (AmazonS3Exception exception)
@@ -1183,9 +1233,9 @@ public class BuildProcessor
 
                         if (mustUpload)
                         {
-                            var result = await this.s3Client.PutObjectAsync(new PutObjectRequest
+                            var result = await this.historyS3Client.PutObjectAsync(new PutObjectRequest
                             {
-                                BucketName = S3_BUCKET_NAME,
+                                BucketName = HISTORY_S3_BUCKET_NAME,
                                 Key = key,
                                 FilePath = archiveZipFile.FullName,
                                 TagSet =

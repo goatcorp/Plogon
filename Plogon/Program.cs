@@ -66,18 +66,31 @@ class Program
 
         if (mode == ModeOfOperation.Unknown)
             throw new Exception("No mode of operation specified.");
-
+        
         var s3AccessKey = Environment.GetEnvironmentVariable("PLOGON_S3_ACCESSKEY");
         var s3Secret = Environment.GetEnvironmentVariable("PLOGON_S3_SECRET");
         var s3Region = Environment.GetEnvironmentVariable("PLOGON_S3_REGION");
-
-        IAmazonS3? s3Client = null;
+        
+        IAmazonS3? historyStorageS3Client = null;
         if (s3AccessKey != null && s3Secret != null && s3Region != null)
         {
             var s3Creds = new Amazon.Runtime.BasicAWSCredentials(s3AccessKey, s3Secret);
-            s3Client = new AmazonS3Client(s3Creds, Amazon.RegionEndpoint.GetBySystemName(s3Region));
+            historyStorageS3Client = new AmazonS3Client(s3Creds, Amazon.RegionEndpoint.GetBySystemName(s3Region));
         }
-
+        
+        IAmazonS3? internalS3Client = null;
+        var internalS3ApiUrl = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_APIURL");
+        var internalAccessKey = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_ACCESSKEY");
+        var internalSecret = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_SECRET");
+        if (internalAccessKey != null && internalSecret != null && internalS3ApiUrl != null)
+        {
+            var internalCreds = new Amazon.Runtime.BasicAWSCredentials(internalAccessKey, internalSecret);
+            internalS3Client = new AmazonS3Client(internalCreds, new AmazonS3Config()
+            {
+                ServiceURL = internalS3ApiUrl,
+            });
+        }
+        
         var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
         var pacChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("PAC_DISCORD_WEBHOOK"));
         var webservices = new WebServices();
@@ -159,7 +172,8 @@ class Program
                 PrDiff = prDiff,
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 CutoffDate = null,
-                S3Client = s3Client,
+                HistoryS3Client = historyStorageS3Client,
+                InternalS3Client = internalS3Client,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
