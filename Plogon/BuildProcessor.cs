@@ -40,25 +40,11 @@ namespace Plogon;
 /// </summary>
 public class BuildProcessor
 {
-    private readonly DirectoryInfo repoFolder;
-    private readonly DirectoryInfo manifestFolder;
-    private readonly DirectoryInfo workFolder;
-    private readonly DirectoryInfo staticFolder;
-    private readonly DirectoryInfo artifactFolder;
-    private readonly byte[]? secretsPrivateKeyBytes;
-    private readonly string? secretsPrivateKeyPassword;
-    private readonly bool allowNonDefaultImages;
-
     private readonly DockerClient dockerClient;
-
-    private readonly IAmazonS3? historyS3Client;
-    private readonly IAmazonS3? internalS3Client;
     
     private static readonly string[] DalamudInternalDll = new[]
     {
         "Dalamud.dll",
-        // "Lumina.dll",
-        // "Lumina.Excel.dll",
         "ImGui.NET.dll",
         "ImGuiScene.dll",
     };
@@ -66,8 +52,6 @@ public class BuildProcessor
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
     private DalamudReleases dalamudReleases;
-
-    private bool needExtendedImage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "8.0.404";
@@ -104,11 +88,6 @@ public class BuildProcessor
             { "11.0.0" }
         },
     };
-
-    private const string EXTENDED_IMAGE_HASH = "fba5ce59717fba4371149b8ae39d222a29a7f402c10e0941c85a27e8d1bb6ce4";
-
-    private const string HISTORY_S3_BUCKET_NAME = "dalamud-plugin-archive";
-    private const string DIFFS_S3_BUCKET_NAME = "plogon-ephemeral";
     
     /// <summary>
     /// Parameters for build processor.
@@ -179,30 +158,37 @@ public class BuildProcessor
         /// S3 client used for ephemeral uploads, such as diffs.
         /// </summary>
         public IAmazonS3? InternalS3Client { get; set; }
+        
+        /// <summary>
+        /// URL to the hosted instance.
+        /// </summary>
+        public string? InternalS3WebUrl { get; set; }
+        
+        /// <summary>
+        /// Bucket name for storing history zips.
+        /// </summary>
+        public string? HistoryBucketName { get; set; }
+        
+        /// <summary>
+        /// Bucket name for storing diffs.
+        /// </summary>
+        public string? DiffsBucketName { get; set; }
     }
+
+    private readonly BuildProcessorSetup setup;
 
     /// <summary>
     /// Set up build processor
     /// </summary>
     public BuildProcessor(BuildProcessorSetup setup)
     {
-        this.repoFolder = setup.RepoFolder;
-        this.manifestFolder = setup.ManifestFolder;
-        this.workFolder = setup.WorkFolder;
-        this.staticFolder = setup.StaticFolder;
-        this.artifactFolder = setup.ArtifactFolder;
-        this.secretsPrivateKeyBytes = setup.SecretsPrivateKeyBytes;
-        this.secretsPrivateKeyPassword = setup.SecretsPrivateKeyPassword;
-        this.allowNonDefaultImages = setup.AllowNonDefaultImages;
+        this.setup = setup; 
 
-        this.pluginRepository = new PluginRepository(repoFolder);
-        this.manifestStorage = new ManifestStorage(manifestFolder, setup.PrDiff, true, setup.CutoffDate);
-        this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, workFolder.CreateSubdirectory("dalamud_releases_work"));
+        this.pluginRepository = new PluginRepository(setup.RepoFolder);
+        this.manifestStorage = new ManifestStorage(setup.ManifestFolder, setup.PrDiff, true, setup.CutoffDate);
+        this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, setup.WorkFolder.CreateSubdirectory("dalamud_releases_work"));
 
         this.dockerClient = new DockerClientConfiguration().CreateClient();
-
-        this.historyS3Client = setup.HistoryS3Client;
-        this.internalS3Client = setup.InternalS3Client;
     }
 
     /// <summary>
@@ -211,44 +197,6 @@ public class BuildProcessor
     /// <returns>List of images</returns>
     public async Task<List<ImageInspectResponse>> SetupDockerImage()
     {
-        if (needExtendedImage)
-        {
-            using var client = new HttpClient();
-
-            var cacheFolder = new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".plogon_cache"));
-            if (!cacheFolder.Exists)
-                cacheFolder.Create();
-
-            var imageFile = new FileInfo(Path.Combine(cacheFolder.FullName, "extended-image.tar.bz2"));
-            Stream? loadStream = null;
-            if (imageFile.Exists)
-            {
-                loadStream = File.OpenRead(imageFile.FullName);
-                Log.Information("Opened extended image from cache: {Path}", imageFile.FullName);
-            }
-            else
-            {
-                var url = Environment.GetEnvironmentVariable("EXTENDED_IMAGE_LINK");
-                using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-                await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
-
-                await using Stream streamToWriteTo = File.Open(imageFile.FullName, FileMode.Create);
-
-                await streamToReadFrom.CopyToAsync(streamToWriteTo);
-                streamToWriteTo.Close();
-
-                loadStream = File.OpenRead(imageFile.FullName);
-                Log.Information("Downloaded extended image to cache: {Path}", imageFile.FullName);
-            }
-
-            await this.dockerClient.Images.LoadImageAsync(new ImageLoadParameters(), loadStream,
-                new Progress<JSONMessage>(progress =>
-                {
-                    Log.Verbose("Docker image load ({Id}): {Status}", progress.ID, progress.Status);
-                }));
-        }
-
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
         {
             FromImage = DOCKER_IMAGE,
@@ -315,7 +263,7 @@ public class BuildProcessor
                 if (state != null && state.BuiltCommit == manifest.Value.Plugin.Commit && !continuous)
                     continue;
 
-                if (manifest.Value.Build?.Image != null && !allowNonDefaultImages)
+                if (manifest.Value.Build?.Image != null && !this.setup.AllowNonDefaultImages)
                     continue;
 
                 tasks.Add(new BuildTask
@@ -332,8 +280,6 @@ public class BuildProcessor
                 });
             }
         }
-
-        needExtendedImage = tasks.Any(x => x.Manifest?.Build?.Image == "extended");
 
         return tasks;
     }
@@ -478,15 +424,15 @@ public class BuildProcessor
 
     private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks, bool doSemantic)
     {
-        async Task UploadDiffToS3(string output, string type, string contentType)
+        async Task UploadDiffToS3(string output, string type, string extension, string contentType)
         {
-            if (this.internalS3Client == null)
+            if (this.setup.InternalS3Client == null)
                 throw new Exception("S3 client not set up");
             
-            var key = $"{task.InternalName}/{task.Manifest.Plugin.Commit}-{type}.diff";
+            var key = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{type}.{extension}";
             var request = new PutObjectRequest
             {
-                BucketName = DIFFS_S3_BUCKET_NAME,
+                BucketName = this.setup.DiffsBucketName,
                 Key = key,
                 ContentBody = output,
                 ContentType = contentType,
@@ -499,7 +445,9 @@ public class BuildProcessor
                 ]
             };
 
-            await this.internalS3Client.PutObjectAsync(request);
+            var res = await this.setup.InternalS3Client.PutObjectAsync(request);
+            if (res is not { HttpStatusCode: HttpStatusCode.OK })
+                throw new Exception($"Failed to upload diff to S3: {res?.HttpStatusCode}");
         }
         
         var internalName = task.InternalName;
@@ -570,7 +518,7 @@ public class BuildProcessor
 
             try
             {
-                await UploadDiffToS3(diffOutput, "diff", "text/plain");
+                await UploadDiffToS3(diffOutput, "plain", ".diff", "text/plain");
             }
             catch (Exception ex)
             {
@@ -613,7 +561,7 @@ public class BuildProcessor
             
             try
             {
-                await UploadDiffToS3(diffOutput, "semantic", "text/html");
+                await UploadDiffToS3(diffOutput, "semantic", ".html", "text/html");
             }
             catch (Exception ex)
             {
@@ -885,15 +833,15 @@ public class BuildProcessor
 
     private async Task<Dictionary<string, string>> DecryptSecrets(BuildTask task)
     {
-        if (this.secretsPrivateKeyBytes is null
-            || this.secretsPrivateKeyPassword is null
+        if (this.setup.SecretsPrivateKeyBytes is null
+            || this.setup.SecretsPrivateKeyPassword is null
             || task.Manifest!.Plugin.Secrets.Count == 0)
             return new Dictionary<string, string>();
 
         // Load keys
         EncryptionKeys encryptionKeys;
-        await using (Stream privateKeyStream = new MemoryStream(secretsPrivateKeyBytes))
-            encryptionKeys = new EncryptionKeys(privateKeyStream, secretsPrivateKeyPassword);
+        await using (Stream privateKeyStream = new MemoryStream(this.setup.SecretsPrivateKeyBytes))
+            encryptionKeys = new EncryptionKeys(privateKeyStream, this.setup.SecretsPrivateKeyPassword);
 
         var pgp = new PGP(encryptionKeys);
 
@@ -951,7 +899,7 @@ public class BuildProcessor
         ParanoiaValidateTask(task);
 
         var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
-        var taskRootDir = this.workFolder.CreateSubdirectory(taskFolderName);
+        var taskRootDir = this.setup.WorkFolder.CreateSubdirectory(taskFolderName);
         Log.Verbose("taskRoot: {TaskRoot}", taskRootDir.FullName);
         var workDir = taskRootDir.CreateSubdirectory("work");
         var archiveDir = taskRootDir.CreateSubdirectory("archive");
@@ -959,7 +907,7 @@ public class BuildProcessor
         var packagesDir = taskRootDir.CreateSubdirectory("packages");
         var externalNeedsDir = taskRootDir.CreateSubdirectory("needs");
 
-        if (!staticFolder.Exists)
+        if (!this.setup.StaticFolder.Exists)
             throw new Exception("Static folder does not exist");
 
         if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
@@ -1009,7 +957,7 @@ public class BuildProcessor
         
         // Create archive zip
         var archiveZipFile =
-            new FileInfo(Path.Combine(this.workFolder.FullName, $"{taskFolderName}-{archiveDir.Name}.zip"));
+            new FileInfo(Path.Combine(this.setup.WorkFolder.FullName, $"{taskFolderName}-{archiveDir.Name}.zip"));
         ZipFile.CreateFromDirectory(archiveDir.FullName, archiveZipFile.FullName);
         
         var diff = await GetPluginDiff(workDir, task, otherTasks, !commit);
@@ -1020,8 +968,9 @@ public class BuildProcessor
         
         await RetryUntil(async () => await GetNeeds(task, externalNeedsDir, allNeeds));
         await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir, allNeeds));
-        
-        var needsExtendedImage = task.Manifest?.Build?.Image == "extended";
+
+        if (!string.IsNullOrEmpty(task.Manifest?.Build?.Image))
+            throw new Exception("Non-default build images are currently not supported, please reach out if you need this");
 
         var dockerEnv = new List<string>
         {
@@ -1052,7 +1001,7 @@ public class BuildProcessor
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
-                Image = needsExtendedImage ? EXTENDED_IMAGE_HASH : $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+                Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
 
                 NetworkDisabled = true,
 
@@ -1067,7 +1016,7 @@ public class BuildProcessor
                     {
                         $"{workDir.FullName}:/work/repo",
                         $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
-                        $"{staticFolder.FullName}:/static:ro",
+                        $"{this.setup.StaticFolder.FullName}:/static:ro",
                         $"{outputDir.FullName}:/output",
                         $"{packagesDir.FullName}:/packages:ro",
                         $"{externalNeedsDir.FullName}:/needs:ro"
@@ -1147,7 +1096,7 @@ public class BuildProcessor
 
         if (dpOutput.Exists)
         {
-            var artifact = this.artifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
+            var artifact = this.setup.ArtifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
             try
             {
                 foreach (var file in dpOutput.GetFiles())
@@ -1212,7 +1161,7 @@ public class BuildProcessor
                         file.CopyTo(Path.Combine(repoOutputDir.FullName, file.Name), true);
                     }
 
-                    if (this.historyS3Client != null)
+                    if (this.setup.HistoryS3Client != null)
                     {
                         var key =
                             $"sources/{task.InternalName}/{task.Manifest.Plugin.Commit}.zip";
@@ -1221,7 +1170,7 @@ public class BuildProcessor
                         bool mustUpload;
                         try
                         {
-                            await this.historyS3Client.GetObjectMetadataAsync(HISTORY_S3_BUCKET_NAME, key);
+                            await this.setup.HistoryS3Client.GetObjectMetadataAsync(this.setup.HistoryBucketName, key);
                             mustUpload = false;
                         }
                         catch (AmazonS3Exception exception)
@@ -1238,9 +1187,9 @@ public class BuildProcessor
 
                         if (mustUpload)
                         {
-                            var result = await this.historyS3Client.PutObjectAsync(new PutObjectRequest
+                            var result = await this.setup.HistoryS3Client.PutObjectAsync(new PutObjectRequest
                             {
-                                BucketName = HISTORY_S3_BUCKET_NAME,
+                                BucketName = this.setup.HistoryBucketName,
                                 Key = key,
                                 FilePath = archiveZipFile.FullName,
                                 TagSet =

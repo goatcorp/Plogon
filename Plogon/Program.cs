@@ -76,19 +76,25 @@ class Program
         {
             var s3Creds = new Amazon.Runtime.BasicAWSCredentials(s3AccessKey, s3Secret);
             historyStorageS3Client = new AmazonS3Client(s3Creds, Amazon.RegionEndpoint.GetBySystemName(s3Region));
+            Log.Verbose("History S3 client OK for {Region}", s3Region);
         }
         
-        IAmazonS3? internalS3Client = null;
         var internalS3ApiUrl = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_APIURL");
-        var internalAccessKey = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_ACCESSKEY");
-        var internalSecret = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_SECRET");
-        if (internalAccessKey != null && internalSecret != null && internalS3ApiUrl != null)
+        var internalS3Region = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_REGION");
+        var internalS3AccessKey = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_ACCESSKEY");
+        var internalS3Secret = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_SECRET");
+        var internalS3WebUrl = Environment.GetEnvironmentVariable("PLOGON_INTERNAL_S3_WEBURL");
+        
+        IAmazonS3? internalS3Client = null;
+        if (internalS3AccessKey != null && internalS3Secret != null && internalS3ApiUrl != null && internalS3Region != null)
         {
-            var internalCreds = new Amazon.Runtime.BasicAWSCredentials(internalAccessKey, internalSecret);
+            var internalCreds = new Amazon.Runtime.BasicAWSCredentials(internalS3AccessKey, internalS3Secret);
             internalS3Client = new AmazonS3Client(internalCreds, new AmazonS3Config()
             {
                 ServiceURL = internalS3ApiUrl,
+                AuthenticationRegion = internalS3Region,
             });
+            Log.Verbose("Internal S3 client OK for {ApiUrl}", internalS3ApiUrl);
         }
         
         var publicChannelWebhook = new DiscordWebhook(Environment.GetEnvironmentVariable("DISCORD_WEBHOOK"));
@@ -174,6 +180,9 @@ class Program
                 CutoffDate = null,
                 HistoryS3Client = historyStorageS3Client,
                 InternalS3Client = internalS3Client,
+                InternalS3WebUrl = internalS3WebUrl,
+                DiffsBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_DIFFS_BUCKET"),
+                HistoryBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_HISTORY_BUCKET"),
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
