@@ -935,14 +935,14 @@ public class BuildProcessor
             RecurseSubmodules = false,
             FetchOptions =
             {
-                Depth = 1,
+                //Depth = 1,
             }
         });
 
         var repo = new Repository(workDir.FullName);
         Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
         {
-            Depth = 1,
+            //Depth = 1,
         }, null);
         repo.Reset(ResetMode.Hard, task.Manifest.Plugin.Commit);
         
@@ -1363,7 +1363,7 @@ public class BuildProcessor
                 Init = true,
                 FetchOptions =
                 {
-                    Depth = 1,
+                    //Depth = 1,
                 }
             });
             
