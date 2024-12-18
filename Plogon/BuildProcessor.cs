@@ -6,9 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.Http.Json;
 using System.Security.Cryptography;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -406,12 +404,6 @@ public class BuildProcessor
         
     }
 
-    private class HasteResponse
-    {
-        [JsonPropertyName("key")]
-        public string? Key { get; set; }
-    };
-    
     /// <summary>
     /// A set of diffs.
     /// </summary>
@@ -424,7 +416,7 @@ public class BuildProcessor
 
     private async Task<PluginDiffSet> GetPluginDiff(DirectoryInfo workDir, BuildTask task, IEnumerable<BuildTask> tasks, bool doSemantic)
     {
-        async Task UploadDiffToS3(string output, string type, string extension, string contentType)
+        async Task<string> UploadDiffToS3(string output, string type, string extension, string contentType)
         {
             if (this.setup.InternalS3Client == null)
                 throw new Exception("S3 client not set up");
@@ -448,6 +440,8 @@ public class BuildProcessor
             var res = await this.setup.InternalS3Client.PutObjectAsync(request);
             if (res is not { HttpStatusCode: HttpStatusCode.OK })
                 throw new Exception($"Failed to upload diff to S3: {res?.HttpStatusCode}");
+            
+            return $"https://{this.setup.DiffsBucketName}.{this.setup.InternalS3WebUrl}/{key}";
         }
         
         var internalName = task.InternalName;
@@ -468,9 +462,7 @@ public class BuildProcessor
                 Log.Information("Overriding diff haveCommit with {Commit} from {Channel}", haveCommit, removeTask.Channel);
             }
         }
-
-        using var client = new HttpClient();
-
+        
         var url = host.AbsoluteUri.Replace(".git", string.Empty);
 
         string? hosterUrl = null;
@@ -512,21 +504,8 @@ public class BuildProcessor
 
             if (haveCommit == emptyTree)
                 return null;
-
-            var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
-            res.EnsureSuccessStatusCode();
-
-            try
-            {
-                await UploadDiffToS3(diffOutput, "plain", ".diff", "text/plain");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to upload diff to S3");
-            }
             
-            var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
-            return $"https://haste.soulja-boy-told.me/{json!.Key}.diff";
+            return await UploadDiffToS3(diffOutput, "plain", "diff", "text/plain");
         }
         
         async Task<string?> MakeAndUploadSemantic()
@@ -555,21 +534,8 @@ public class BuildProcessor
 
             if (haveCommit == emptyTree)
                 return null;
-
-            var res = await client.PostAsync("https://haste.soulja-boy-told.me/documents", new StringContent(diffOutput));
-            res.EnsureSuccessStatusCode();
             
-            try
-            {
-                await UploadDiffToS3(diffOutput, "semantic", ".html", "text/html");
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to upload semantic diff to S3");
-            }
-
-            var json = await res.Content.ReadFromJsonAsync<HasteResponse>();
-            return $"https://haste.soulja-boy-told.me/raw/{json!.Key}.html";
+            return await UploadDiffToS3(diffOutput, "semantic", "html", "text/html");
         }
 
         var linesAdded = 0;
@@ -600,12 +566,12 @@ public class BuildProcessor
 
             if (match.Success)
             {
-                if (!match.Groups.TryGetValue("numInsertions", out var groupInsertions) || !int.TryParse(groupInsertions?.Value, out linesAdded))
+                if (!match.Groups.TryGetValue("numInsertions", out var groupInsertions) || !int.TryParse(groupInsertions.Value, out linesAdded))
                 {
                     Log.Error("Could not parse insertions");
                 }
 
-                if (!match.Groups.TryGetValue("numDeletions", out var groupDeletions) || !int.TryParse(groupDeletions?.Value, out linesRemoved))
+                if (!match.Groups.TryGetValue("numDeletions", out var groupDeletions) || !int.TryParse(groupDeletions.Value, out linesRemoved))
                 {
                     Log.Error("Could not parse deletions");
                 }
