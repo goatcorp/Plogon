@@ -83,7 +83,7 @@ public class BuildProcessor
     {
         { "Dalamud.NET.Sdk", new[]
             // This should have all the SDK packages we still support.
-            { "11.0.0" }
+            { "11.0.0", "11.2.0" }
         },
     };
     
