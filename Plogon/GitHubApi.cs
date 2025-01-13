@@ -130,10 +130,16 @@ public class GitHubApi
 
         var firstApprovingReview = reviews.FirstOrDefault(r => r.State == PullRequestReviewState.Approved &&
                                                                PlogonSystemDefine.PacMembers.Contains(r.User.Login));
-        if (firstApprovingReview == null)
-            throw new Exception($"No approving reviews on PR {issueNumber}");
-
-        return firstApprovingReview.User.Login;
+        if (firstApprovingReview != null)
+            return firstApprovingReview.User.Login;
+        
+        var comments = await this.ghClient.Issue.Comment.GetAllForIssue(repoOwner, repoName, issueNumber);
+        var firstApprovingComment = comments.FirstOrDefault(c => PlogonSystemDefine.PacMembers.Contains(c.User.Login) &&
+                                                                 c.Body.Equals("bleatbot, approve", StringComparison.OrdinalIgnoreCase));
+        if (firstApprovingComment != null)
+            return firstApprovingComment.User.Login;
+        
+        throw new Exception($"No approving reviews on PR {issueNumber}");
     }
 
     /// <summary>
