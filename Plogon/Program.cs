@@ -131,7 +131,7 @@ class Program
             if (string.IsNullOrEmpty(repoName))
                 throw new Exception("repoName null or empty");
             
-            if (githubActor == null)
+            if (githubActor == null && mode == ModeOfOperation.PullRequest)
                 throw new Exception("GITHUB_ACTOR not set");
 
             gitHubApi = new GitHubApi(repoOwner, repoName, token);
