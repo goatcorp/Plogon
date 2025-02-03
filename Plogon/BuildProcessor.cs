@@ -418,8 +418,8 @@ public class BuildProcessor
     {
         async Task<string?> UploadDiffToS3(string output, string type, string extension, string contentType)
         {
-            // Limit diffs to ~10mb
-            const int maxDiffSize = 10 * 1024 * 1024;
+            // Limit diffs to ~2mb
+            const int maxDiffSize = 2 * 1024 * 1024;
             if (output.Length > maxDiffSize)
             {
                 Log.Error($"Diff too large, ignoring: {output.Length} > {maxDiffSize}");
