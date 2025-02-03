@@ -418,6 +418,14 @@ public class BuildProcessor
     {
         async Task<string> UploadDiffToS3(string output, string type, string extension, string contentType)
         {
+            // Limit diffs to ~10mb
+            const int maxDiffSize = 10 * 1024 * 1024;
+            if (output.Length > maxDiffSize)
+            {
+                Log.Error($"Diff too large, ignoring: {output.Length} > {maxDiffSize}");
+                return null;
+            }
+            
             if (this.setup.InternalS3Client == null)
                 throw new Exception("S3 client not set up");
             
