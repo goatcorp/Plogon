@@ -52,6 +52,8 @@ public class State
                 public List<UsedNeed>? UsedNeeds { get; set; }
 
                 public string Reviewer { get; set; }
+                
+                public string Submitter { get; set; }
             }
         }
 

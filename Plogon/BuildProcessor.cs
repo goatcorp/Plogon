@@ -171,6 +171,11 @@ public class BuildProcessor
         /// Bucket name for storing diffs.
         /// </summary>
         public string? DiffsBucketName { get; set; }
+        
+        /// <summary>
+        /// Username of the submitter, when committing builds.
+        /// </summary>
+        public string? ActorName { get; set; }
     }
 
     private readonly BuildProcessorSetup setup;
@@ -1123,7 +1128,8 @@ public class BuildProcessor
                         version ?? throw new Exception("Committing, but version is null"),
                         task.Manifest.Plugin.MinimumVersion,
                         changelog,
-                        reviewer!,
+                        reviewer ?? throw new Exception("Committing, but reviewer is null"),
+                        this.setup.ActorName ?? throw new Exception("Committing, but actor name is null"),
                         allNeeds.Select(x => (x.Name, x.Version)));
                     
                     this.CommitReviewedNeeds(allNeeds, reviewer!);

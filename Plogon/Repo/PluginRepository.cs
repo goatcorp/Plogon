@@ -114,6 +114,7 @@ public class PluginRepository
     /// <param name="minimumVersion">Minimum version Dalamud should still try to load.</param>
     /// <param name="changelog">Plugin changelog</param>
     /// <param name="reviewer">Who reviewed this version</param>
+    /// <param name="submitter">Who submitted this version</param>
     /// <param name="needs">Needs we had for this version</param>
     public void UpdatePluginHave(
         string channelName,
@@ -123,6 +124,7 @@ public class PluginRepository
         string? minimumVersion,
         string? changelog,
         string reviewer,
+        string submitter,
         IEnumerable<(string Key, string Version)> needs)
     {
         if (!this.State.Channels.ContainsKey(channelName))
@@ -161,6 +163,7 @@ public class PluginRepository
                 Version = x.Version,
             }).ToList(),
             Reviewer = reviewer,
+            Submitter = submitter,
         };
 
         SaveState();

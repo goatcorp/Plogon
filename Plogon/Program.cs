@@ -183,6 +183,7 @@ class Program
                 InternalS3WebUrl = internalS3WebUrl,
                 DiffsBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_DIFFS_BUCKET"),
                 HistoryBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_HISTORY_BUCKET"),
+                ActorName = githubActor,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
