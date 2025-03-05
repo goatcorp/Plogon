@@ -277,6 +277,11 @@ class Program
 
                         var relevantCommitHashForWebServices = task.Manifest?.Plugin.Commit;
                         
+                        var manifestOwners = (task.Manifest?.Plugin.Owners ?? Enumerable.Empty<string>())
+                                                                .Union(PlogonSystemDefine.PacMembers);
+
+                        var isManifestOwner = manifestOwners.Any(x => x == githubActor);
+                        
                         // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
                         if (task.Type == BuildTask.TaskType.Remove)
                         {
@@ -305,9 +310,12 @@ class Program
                             reviewer = await gitHubApi!.GetReviewer(committingPrNum.Value);
                             Log.Information("Reviewer for {InternalName} ({PrNum}): {Reviewer}", task.InternalName, committingPrNum.Value, reviewer);
                         }
-                        // When building a PR: Register the PR number for the plugin with webservices so that we know what plugin update came from what PR
-                        else if (mode == ModeOfOperation.PullRequest)
+                        // When running as a PR: Register the PR number for the plugin with webservices so that we know what plugin update came from what PR
+                        // Only do this if we own the plugin, as we don't want to register PR numbers for plugins we don't own
+                        // TODO: This blocks removals. Get the repo state at master and look up the owners of the plugin there.
+                        else if (mode == ModeOfOperation.PullRequest && isManifestOwner && task.Type != BuildTask.TaskType.Remove)
                         {
+                            Log.Information("Registering PR number for {InternalName} ({Sha}): {PrNum}", task.InternalName, relevantCommitHashForWebServices, prNumber);
                             await webservices.RegisterPrNumber(task.InternalName, relevantCommitHashForWebServices,
                                                                prNumber ?? throw new Exception("No PR number"));
                         }
@@ -339,8 +347,7 @@ class Program
 
                         GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
 
-                        if (!buildAll && (task.Manifest.Plugin.Owners.All(x => x != githubActor) &&
-                                          PlogonSystemDefine.PacMembers.All(x => x != githubActor)))
+                        if (!buildAll && !isManifestOwner)
                         {
                             Log.Information("Not owned: {Name} - {Sha} (have {HaveCommit})", task.InternalName,
                                 task.Manifest.Plugin.Commit,
