@@ -40,12 +40,12 @@ public class BuildProcessor
 {
     private readonly DockerClient dockerClient;
     
-    private static readonly string[] DalamudInternalDll = new[]
-    {
+    private static readonly string[] DalamudInternalDll =
+    [
         "Dalamud.dll",
         "ImGui.NET.dll",
-        "ImGuiScene.dll",
-    };
+        "ImGuiScene.dll"
+    ];
 
     private PluginRepository pluginRepository;
     private ManifestStorage manifestStorage;
@@ -59,20 +59,20 @@ public class BuildProcessor
     // If a plugin breaks with a missing runtime package you might want to add the package here.
     private readonly Dictionary<string, string[]> RUNTIME_PACKAGES = new()
     {
-        { ".NETStandard,Version=v2.0", new[]
-            { "2.0.0" }
+        { 
+            ".NETStandard,Version=v2.0", ["2.0.0"]
         },
-        { "net5.0", new[]
-            { "5.0.0" }
+        { 
+            "net5.0", ["5.0.0"]
         },
-        { "net6.0", new[]
-            { "6.0.0", "6.0.11" }
+        { 
+            "net6.0", ["6.0.0", "6.0.11"]
         },
-        { "net7.0", new[]
-            { "7.0.0", "7.0.1", "7.0.14", "7.0.15" }
+        { 
+            "net7.0", ["7.0.0", "7.0.1", "7.0.14", "7.0.15"]
         },
-        { "net8.0", new[]
-            { "8.0.0" }
+        { 
+            "net8.0", ["8.0.0"]
         }
     };
 
@@ -81,9 +81,8 @@ public class BuildProcessor
     // added to lockfiles.
     private readonly Dictionary<string, string[]> FORCE_PACKAGES = new()
     {
-        { "Dalamud.NET.Sdk", new[]
-            // This should have all the SDK packages we still support.
-            { "11.0.0", "11.2.0" }
+        {
+            "Dalamud.NET.Sdk", ["11.0.0", "11.2.0"]
         },
     };
     
@@ -123,7 +122,7 @@ public class BuildProcessor
         public FileInfo? BuildOverridesFile { get; set; }
 
         /// <summary>
-        /// Whether or not non-default build images are allowed.
+        /// Whether non-default build images are allowed.
         /// </summary>
         public bool AllowNonDefaultImages { get; set; }
 
@@ -215,7 +214,7 @@ public class BuildProcessor
             All = true,
         });
 
-        List<ImageInspectResponse> inspects = new();
+        List<ImageInspectResponse> inspects = [];
         foreach (var imagesListResponse in images)
         {
             var inspect = await this.dockerClient.Images.InspectImageAsync(imagesListResponse.ID);
@@ -334,7 +333,7 @@ public class BuildProcessor
 
         using var client = new HttpClient();
 
-        HashSet<Tuple<string, string>> runtimeDependencies = new();
+        HashSet<Tuple<string, string>> runtimeDependencies = [];
         foreach (var file in lockFiles)
         {
             var lockFileData = JsonConvert.DeserializeObject<NugetLockfile>(File.ReadAllText(file.FullName));
@@ -651,7 +650,7 @@ public class BuildProcessor
 
     HashSet<Tuple<string, string>> GetRuntimeDependencies(NugetLockfile lockFileData)
     {
-        HashSet<Tuple<string, string>> dependencies = new();
+        HashSet<Tuple<string, string>> dependencies = [];
 
         foreach (var runtime in lockFileData.Runtimes)
         {
@@ -919,7 +918,8 @@ public class BuildProcessor
         });
 
         var repo = new Repository(workDir.FullName);
-        Commands.Fetch(repo, "origin", new [] { task.Manifest.Plugin.Commit }, new FetchOptions
+        Commands.Fetch(repo, "origin",
+                       [task.Manifest.Plugin.Commit], new FetchOptions
         {
             //Depth = 1,
         }, null);
