@@ -107,13 +107,13 @@ public class GitHubApi
     /// <param name="issueNumber">Issue number</param>
     /// <returns>PR body</returns>
     /// <exception cref="Exception">Thrown when the body couldn't be read</exception>
-    public async Task<string> GetIssueBody(int issueNumber)
+    public async Task<(string Author, string Body)> GetPullRequestInfo(int issueNumber)
     {
         var pr = await this.ghClient.PullRequest.Get(repoOwner, repoName, issueNumber);
         if (pr == null)
             throw new Exception("Could not get PR");
 
-        return pr.Body;
+        return (pr.User.Login, pr.Body);
     }
     
     /// <summary>

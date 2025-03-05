@@ -170,11 +170,6 @@ public class BuildProcessor
         /// Bucket name for storing diffs.
         /// </summary>
         public string? DiffsBucketName { get; set; }
-        
-        /// <summary>
-        /// Username of the submitter, when committing builds.
-        /// </summary>
-        public string? ActorName { get; set; }
     }
 
     private readonly BuildProcessorSetup setup;
@@ -846,11 +841,12 @@ public class BuildProcessor
     /// <param name="commit">Whether the plugin should be committed to the repo</param>
     /// <param name="changelog">The plugin changelog</param>
     /// <param name="reviewer">Reviewer of this task</param>
+    /// <param name="submitter">Submitter of this task</param>
     /// <param name="otherTasks">All other queued tasks</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, ISet<BuildTask> otherTasks)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, string? submitter, ISet<BuildTask> otherTasks)
     {
         if (commit && string.IsNullOrWhiteSpace(reviewer))
             throw new Exception("Reviewer must be set when committing");
@@ -1129,10 +1125,10 @@ public class BuildProcessor
                         task.Manifest.Plugin.MinimumVersion,
                         changelog,
                         reviewer ?? throw new Exception("Committing, but reviewer is null"),
-                        this.setup.ActorName ?? throw new Exception("Committing, but actor name is null"),
+                        submitter ?? throw new Exception("Committing, but submitter is null"),
                         allNeeds.Select(x => (x.Name, x.Version)));
                     
-                    this.CommitReviewedNeeds(allNeeds, reviewer!);
+                    this.CommitReviewedNeeds(allNeeds, reviewer);
 
                     var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
 

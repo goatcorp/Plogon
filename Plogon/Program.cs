@@ -183,7 +183,6 @@ class Program
                 InternalS3WebUrl = internalS3WebUrl,
                 DiffsBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_DIFFS_BUCKET"),
                 HistoryBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_HISTORY_BUCKET"),
-                ActorName = githubActor,
             };
 
             // HACK, we don't know the API level a plugin is for before building it...
@@ -272,8 +271,11 @@ class Program
 
                     try
                     {
-                        string? reviewer = null;
+                        // We'll override this with the PR body if we are committing
                         var changelog = task.Manifest?.Plugin.Changelog;
+                        
+                        string? reviewer = null;
+                        string? committingAuthor = null;
                         int? committingPrNum = null;
 
                         var relevantCommitHashForWebServices = task.Manifest?.Plugin.Commit;
@@ -303,13 +305,16 @@ class Program
                             Log.Verbose("PR number for {InternalName} ({Sha}): {PrNum}", task.InternalName, relevantCommitHashForWebServices, committingPrNum);
                             taskToPrNumber.Add(task, committingPrNum.Value);
 
+                            var prInfo = await gitHubApi!.GetPullRequestInfo(committingPrNum.Value);
                             if (string.IsNullOrEmpty(changelog))
                             {
-                                changelog = await gitHubApi!.GetIssueBody(committingPrNum.Value);
+                                changelog = prInfo.Body;
                             }
                             
-                            reviewer = await gitHubApi!.GetReviewer(committingPrNum.Value);
-                            Log.Information("Reviewer for {InternalName} ({PrNum}): {Reviewer}", task.InternalName, committingPrNum.Value, reviewer);
+                            committingAuthor = prInfo.Author;
+                            
+                            reviewer = await gitHubApi.GetReviewer(committingPrNum.Value);
+                            Log.Information("Reviewer for {InternalName} ({PrNum} by {Author}): {Reviewer}", task.InternalName, committingPrNum.Value, committingAuthor, reviewer);
                         }
                         // When running as a PR: Register the PR number for the plugin with webservices so that we know what plugin update came from what PR
                         // Only do this if we own the plugin, as we don't want to register PR numbers for plugins we don't own
@@ -330,7 +335,7 @@ class Program
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
-                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, reviewer, tasks);
+                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, reviewer, committingAuthor, tasks);
                             allResults.Add(removeStatus);
 
                             if (removeStatus.Success)
@@ -346,7 +351,7 @@ class Program
                             continue;
                         }
 
-                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin!.Commit})");
+                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin.Commit})");
 
                         if (!buildAll && !isManifestOwner)
                         {
@@ -369,7 +374,7 @@ class Program
 
                         numTried++;
 
-                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, tasks);
+                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, committingAuthor, tasks);
                         allResults.Add(buildResult);
 
                         var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;
@@ -434,7 +439,7 @@ class Program
                                 if (string.IsNullOrEmpty(changelog) && repoName != null &&
                                     gitHubApi != null)
                                 {
-                                    changelog = await gitHubApi.GetIssueBody(committingPrNum.Value);
+                                    (_, changelog) = await gitHubApi.GetPullRequestInfo(committingPrNum.Value);
                                 }
 
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
@@ -635,9 +640,9 @@ class Program
                     {
                         hookTitle += " created";
 
-                        var prDesc = await gitHubApi!.GetIssueBody(prNumber.Value);
-                        if (!string.IsNullOrEmpty(prDesc))
-                            buildInfo += $"```\n{prDesc}\n```\n";
+                        var (_, prBody) = await gitHubApi!.GetPullRequestInfo(prNumber.Value);
+                        if (!string.IsNullOrEmpty(prBody))
+                            buildInfo += $"```\n{prBody}\n```\n";
                     }
                     else
                     {
