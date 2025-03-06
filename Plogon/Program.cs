@@ -52,6 +52,7 @@ class Program
     /// </summary>
     /// <param name="outputFolder">The folder used for storing output and state.</param>
     /// <param name="manifestFolder">The folder used for storing plugin manifests.</param>
+    /// <param name="masterManifestFolder">When running for a PR, directory containing the current, unmodified manifests.</param>
     /// <param name="workFolder">The folder to store temporary files and build output in.</param>
     /// <param name="staticFolder">The 'static' folder that holds script files.</param>
     /// <param name="artifactFolder">The folder to store artifacts in.</param>
@@ -59,8 +60,17 @@ class Program
     /// <param name="buildOverridesFile">Path to file containing build overrides.</param>
     /// <param name="ci">Running in CI.</param>
     /// <param name="buildAll">Ignore actor checks.</param>
-    static async Task Main(DirectoryInfo outputFolder, DirectoryInfo manifestFolder, DirectoryInfo workFolder,
-        DirectoryInfo staticFolder, DirectoryInfo artifactFolder, ModeOfOperation mode, FileInfo? buildOverridesFile = null, bool ci = false, bool buildAll = false)
+    static async Task Main(
+        DirectoryInfo outputFolder,
+        DirectoryInfo manifestFolder,
+        DirectoryInfo? masterManifestFolder,
+        DirectoryInfo workFolder,
+        DirectoryInfo staticFolder,
+        DirectoryInfo artifactFolder,
+        ModeOfOperation mode,
+        FileInfo? buildOverridesFile = null,
+        bool ci = false,
+        bool buildAll = false)
     {
         SetupLogging();
 
@@ -167,32 +177,28 @@ class Program
 
             var setup = new BuildProcessor.BuildProcessorSetup
             {
-                RepoFolder = outputFolder,
-                ManifestFolder = manifestFolder,
-                WorkFolder = workFolder,
-                StaticFolder = staticFolder,
-                ArtifactFolder = artifactFolder,
+                RepoDirectory = outputFolder,
+                WorkingManifestDirectory = manifestFolder,
+                MasterManifestDirectory = masterManifestFolder,
+                WorkDirectory = workFolder,
+                StaticDirectory = staticFolder,
+                ArtifactDirectory = artifactFolder,
                 BuildOverridesFile = buildOverridesFile,
                 SecretsPrivateKeyBytes = secretsPkBytes,
                 SecretsPrivateKeyPassword = secretsPkPassword,
                 PrDiff = prDiff,
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
-                CutoffDate = null,
                 HistoryS3Client = historyStorageS3Client,
                 InternalS3Client = internalS3Client,
                 InternalS3WebUrl = internalS3WebUrl,
                 DiffsBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_DIFFS_BUCKET"),
                 HistoryBucketName = Environment.GetEnvironmentVariable("PLOGON_S3_HISTORY_BUCKET"),
+                
+                // HACK, we don't know the API level a plugin is for before building it...
+                // Feels like a design flaw, but we can't do much about it until we change how
+                // packager works
+                CutoffDate = mode == ModeOfOperation.Continuous ? new DateTime(2023, 06, 10) : null,
             };
-
-            // HACK, we don't know the API level a plugin is for before building it...
-            // Feels like a design flaw, but we can't do much about it until we change how
-            // packager works
-            if (mode == ModeOfOperation.Continuous)
-            {
-                // API8 release
-                setup.CutoffDate = new DateTime(2023, 06, 10);
-            }
 
             var buildProcessor = new BuildProcessor(setup);
             var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
@@ -236,25 +242,22 @@ class Program
 
                 foreach (var task in tasks)
                 {
-                    string? fancyCommit = null;
-                    var url = task.Manifest?.Plugin.Repository.Replace(".git", string.Empty);
-                    if (task.Manifest?.Plugin.Commit != null && url != null)
+                    if (task.Manifest == null)
+                         throw new Exception("Task had no manifest");
+                    
+                    var url = task.Manifest.Plugin.Repository.Replace(".git", string.Empty);
+                    var fancyCommit = task.Manifest.Plugin.Commit.Length > 7
+                                          ? task.Manifest.Plugin.Commit[..7]
+                                          : task.Manifest.Plugin.Commit;
+
+                    if (task.IsGitHub)
                     {
-                        fancyCommit = task.Manifest.Plugin.Commit.Length > 7
-                            ? task.Manifest.Plugin.Commit[..7]
-                            : task.Manifest.Plugin.Commit;
-
-                        if (task.IsGitHub)
-                        {
-                            fancyCommit = $"[{fancyCommit}]({url}/commit/{task.Manifest.Plugin.Commit})";
-                        }
-                        else if (task.IsGitLab)
-                        {
-                            fancyCommit = $"[{fancyCommit}]({url}/-/commit/{task.Manifest.Plugin.Commit})";
-                        }
+                        fancyCommit = $"[{fancyCommit}]({url}/commit/{task.Manifest.Plugin.Commit})";
                     }
-
-                    fancyCommit ??= "n/a";
+                    else if (task.IsGitLab)
+                    {
+                        fancyCommit = $"[{fancyCommit}]({url}/-/commit/{task.Manifest.Plugin.Commit})";
+                    }
 
                     if (aborted)
                     {
@@ -318,8 +321,7 @@ class Program
                         }
                         // When running as a PR: Register the PR number for the plugin with webservices so that we know what plugin update came from what PR
                         // Only do this if we own the plugin, as we don't want to register PR numbers for plugins we don't own
-                        // TODO: This blocks removals. Get the repo state at master and look up the owners of the plugin there.
-                        else if (mode == ModeOfOperation.PullRequest && isManifestOwner && task.Type != BuildTask.TaskType.Remove)
+                        else if (mode == ModeOfOperation.PullRequest && isManifestOwner)
                         {
                             Log.Information("Registering PR number for {InternalName} ({Sha}): {PrNum}", task.InternalName, relevantCommitHashForWebServices, prNumber);
                             await webservices.RegisterPrNumber(task.InternalName, relevantCommitHashForWebServices,
@@ -691,7 +693,7 @@ class Program
 
                         if (!taskToPrNumber.TryGetValue(buildResult.Task, out var resultPrNum))
                         {
-                            throw new Exception($"No PR number for commit {buildResult.Task.InternalName} - {buildResult.Task.Manifest!.Plugin.Commit}");
+                            throw new Exception($"No PR number for commit {buildResult.Task.InternalName} - {buildResult.Task.Manifest.Plugin.Commit}");
                         }
 
                         try
@@ -790,8 +792,8 @@ class Program
                           {
                               { gitHubApi.RepoOwner, gitHubApi.RepoName },
                           },
-                          Is = new[] { IssueIsQualifier.PullRequest },
-                          Labels = new[] { PlogonSystemDefine.PR_LABEL_NEW_PLUGIN },
+                          Is = [ IssueIsQualifier.PullRequest ],
+                          Labels = [ PlogonSystemDefine.PR_LABEL_NEW_PLUGIN ],
                           SortField = IssueSearchSort.Created,
                       });
         var lastNewPluginPr = result?.Items.FirstOrDefault(x => x.Number != prNumber);

@@ -45,6 +45,13 @@ public class ManifestStorage
 
         this.Channels = channels;
     }
+    
+    public Manifest? GetManifest(string channel, string internalName)
+    {
+        return !this.Channels.TryGetValue(channel, out var manifests) ?
+                   null :
+                   manifests.GetValueOrDefault(internalName);
+    }
 
     private Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory, bool ignoreNonAffected)
     {

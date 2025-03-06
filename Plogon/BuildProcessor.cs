@@ -38,7 +38,8 @@ namespace Plogon;
 /// </summary>
 public class BuildProcessor
 {
-    private readonly DockerClient dockerClient;
+    private readonly HttpClient httpClient = new();
+    private readonly DockerClient dockerClient = new DockerClientConfiguration().CreateClient();
     
     private static readonly string[] DalamudInternalDll =
     [
@@ -47,9 +48,11 @@ public class BuildProcessor
         "ImGuiScene.dll"
     ];
 
-    private PluginRepository pluginRepository;
-    private ManifestStorage manifestStorage;
-    private DalamudReleases dalamudReleases;
+    private readonly PluginRepository pluginRepository;
+    private readonly DalamudReleases dalamudReleases;
+    
+    private readonly ManifestStorage workingManifestStorage;
+    private readonly ManifestStorage? masterManifestStorage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
     private const string DOCKER_TAG = "8.0.404";
@@ -94,82 +97,88 @@ public class BuildProcessor
         /// <summary>
         /// Directory containing build output.
         /// </summary>
-        public DirectoryInfo RepoFolder { get; set; }
+        public DirectoryInfo RepoDirectory { get; init; }
 
         /// <summary>
         /// Directory containing manifests.
         /// </summary>
-        public DirectoryInfo ManifestFolder { get; set; }
+        public DirectoryInfo WorkingManifestDirectory { get; init; }
+        
+        /// <summary>
+        /// When running for a PR, directory containing the current, unmodified manifests.
+        /// Used to determine the owners of a manifest if it was removed.
+        /// </summary>
+        public DirectoryInfo? MasterManifestDirectory { get; set; }
 
         /// <summary>
         /// Directory builds will be made in.
         /// </summary>
-        public DirectoryInfo WorkFolder { get; set; }
+        public DirectoryInfo WorkDirectory { get; init; }
 
         /// <summary>
         /// Directory containing static files.
         /// </summary>
-        public DirectoryInfo StaticFolder { get; set; }
+        public DirectoryInfo StaticDirectory { get; init; }
 
         /// <summary>
         /// Directory artifacts will be stored in.
         /// </summary>
-        public DirectoryInfo ArtifactFolder { get; set; }
+        public DirectoryInfo ArtifactDirectory { get; init; }
 
         /// <summary>
         /// Path to file containing overrides for the Dalamud version used.
         /// </summary>
-        public FileInfo? BuildOverridesFile { get; set; }
+        public FileInfo? BuildOverridesFile { get; init; }
 
         /// <summary>
         /// Whether non-default build images are allowed.
         /// </summary>
-        public bool AllowNonDefaultImages { get; set; }
+        public bool AllowNonDefaultImages { get; init; }
 
         /// <summary>
         /// When set, plugins whose manifest was modified before this date will not be built.
         /// </summary>
-        public DateTime? CutoffDate { get; set; }
+        public DateTime? CutoffDate { get; init; }
 
         /// <summary>
         /// Bytes of the secrets private key.
         /// </summary>
-        public byte[]? SecretsPrivateKeyBytes { get; set; }
+        public byte[]? SecretsPrivateKeyBytes { get; init; }
 
         /// <summary>
         /// Password for the aforementioned private key.
         /// </summary>
-        public string? SecretsPrivateKeyPassword { get; set; }
+        public string? SecretsPrivateKeyPassword { get; init; }
 
         /// <summary>
         /// Diff in unified format that contains the changes requested by the PR we are running as
         /// </summary>
-        public string? PrDiff { get; set; }
+        public string? PrDiff { get; init; }
         
         /// <summary>
         /// S3 client to use for artifact uploads.
         /// </summary>
-        public IAmazonS3? HistoryS3Client { get; set; }
+        public IAmazonS3? HistoryS3Client { get; init; }
         
         /// <summary>
         /// S3 client used for ephemeral uploads, such as diffs.
         /// </summary>
-        public IAmazonS3? InternalS3Client { get; set; }
+        public IAmazonS3? InternalS3Client { get; init; }
         
         /// <summary>
         /// URL to the hosted instance.
         /// </summary>
-        public string? InternalS3WebUrl { get; set; }
+        public string? InternalS3WebUrl { get; init; }
         
         /// <summary>
         /// Bucket name for storing history zips.
         /// </summary>
-        public string? HistoryBucketName { get; set; }
+        public string? HistoryBucketName { get; init; }
         
         /// <summary>
         /// Bucket name for storing diffs.
         /// </summary>
-        public string? DiffsBucketName { get; set; }
+        public string? DiffsBucketName { get; init; }
     }
 
     private readonly BuildProcessorSetup setup;
@@ -181,11 +190,12 @@ public class BuildProcessor
     {
         this.setup = setup; 
 
-        this.pluginRepository = new PluginRepository(setup.RepoFolder);
-        this.manifestStorage = new ManifestStorage(setup.ManifestFolder, setup.PrDiff, true, setup.CutoffDate);
-        this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, setup.WorkFolder.CreateSubdirectory("dalamud_releases_work"));
-
-        this.dockerClient = new DockerClientConfiguration().CreateClient();
+        this.pluginRepository = new PluginRepository(setup.RepoDirectory);
+        this.workingManifestStorage = new ManifestStorage(setup.WorkingManifestDirectory, setup.PrDiff, true, setup.CutoffDate);
+        this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, setup.WorkDirectory.CreateSubdirectory("dalamud_releases_work"));
+        
+        if (this.setup.MasterManifestDirectory is { Exists: true })
+            this.masterManifestStorage = new ManifestStorage(this.setup.MasterManifestDirectory, null, false, null);
     }
 
     /// <summary>
@@ -233,13 +243,17 @@ public class BuildProcessor
             foreach (var plugin in channel.Value.Plugins)
             {
                 // Channel decommissioned or no longer in manifests
-                if (!this.manifestStorage.Channels.ContainsKey(channel.Key) ||
-                    this.manifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
+                if (!this.workingManifestStorage.Channels.ContainsKey(channel.Key) ||
+                    this.workingManifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
                 {
+                    var manifestBeingRemoved = this.masterManifestStorage?.GetManifest(channel.Key, plugin.Key);
+                    if (manifestBeingRemoved == null)
+                        throw new Exception($"Could not find manifest for plugin being removed in master manifests ({channel.Key}/{plugin.Key})");
+                    
                     tasks.Add(new BuildTask
                     {
                         InternalName = plugin.Key,
-                        Manifest = null,
+                        Manifest = manifestBeingRemoved,
                         Channel = channel.Key,
                         HaveCommit = plugin.Value.BuiltCommit,
                         HaveTimeBuilt = null,
@@ -250,7 +264,7 @@ public class BuildProcessor
             }
         }
 
-        foreach (var channel in this.manifestStorage.Channels)
+        foreach (var channel in this.workingManifestStorage.Channels)
         {
             foreach (var manifest in channel.Value)
             {
@@ -281,11 +295,11 @@ public class BuildProcessor
         return tasks;
     }
 
-    async Task<BuildResult.ReviewedNeed> GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgFolder, HttpClient client)
+    private async Task<BuildResult.ReviewedNeed> GetDependency(string name, NugetLockfile.Dependency dependency, DirectoryInfo pkgDir)
     {
         var pkgName = name.ToLower();
         var fileName = $"{pkgName}.{dependency.Resolved}.nupkg";
-        var depPath = Path.Combine(pkgFolder.FullName, fileName);
+        var depPath = Path.Combine(pkgDir.FullName, fileName);
 
         var need = GetNeedStatus(name, dependency.Resolved, State.Need.NeedType.NuGet);
         
@@ -296,7 +310,7 @@ public class BuildProcessor
         var url =
             $"https://api.nuget.org/v3-flatcontainer/{pkgName}/{dependency.Resolved}/{fileName}";
 
-        var data = await client.GetByteArrayAsync(url);
+        var data = await this.httpClient.GetByteArrayAsync(url);
 
         // TODO: verify content hash
 
@@ -304,7 +318,7 @@ public class BuildProcessor
         return need;
     }
 
-    private async Task RestorePackages(DirectoryInfo pkgFolder, NugetLockfile lockFileData, HttpClient client, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
+    private async Task RestorePackages(DirectoryInfo pkgDir, NugetLockfile lockFileData, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
         foreach (var runtime in lockFileData.Runtimes)
         {
@@ -312,21 +326,19 @@ public class BuildProcessor
 
             var resultNeeds = await Task.WhenAll(runtime.Value
                 .Where(x => x.Value.Type != NugetLockfile.Dependency.DependencyType.Project)
-                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgFolder, client)).ToList());
+                .Select(dependency => GetDependency(dependency.Key, dependency.Value, pkgDir)).ToList());
 
             foreach (var reviewedNeed in resultNeeds)
                 reviewedNeeds.Add(reviewedNeed);
         }
     }
 
-    private async Task RestoreAllPackages(DirectoryInfo localWorkFolder, DirectoryInfo pkgFolder, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
+    private async Task RestoreAllPackages(DirectoryInfo localWorkDir, DirectoryInfo pkgDir, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
-        var lockFiles = localWorkFolder.GetFiles("packages.lock.json", SearchOption.AllDirectories);
+        var lockFiles = localWorkDir.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
         if (lockFiles.Length == 0)
             throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
-
-        using var client = new HttpClient();
 
         HashSet<Tuple<string, string>> runtimeDependencies = [];
         foreach (var file in lockFiles)
@@ -340,7 +352,7 @@ public class BuildProcessor
 
             runtimeDependencies.UnionWith(GetRuntimeDependencies(lockFileData));
 
-            await RestorePackages(pkgFolder, lockFileData, client, reviewedNeeds);
+            await RestorePackages(pkgDir, lockFileData, reviewedNeeds);
         }
 
         // fetch runtime packages
@@ -350,9 +362,8 @@ public class BuildProcessor
                 runtimeDependencies.Select(
                     dependency => GetDependency(
                         dependency.Item1,
-                        new() { Resolved = dependency.Item2 },
-                        pkgFolder,
-                        client)));
+                        new NugetLockfile.Dependency { Resolved = dependency.Item2 },
+                        pkgDir)));
         }
         catch (Exception e)
         {
@@ -361,20 +372,18 @@ public class BuildProcessor
 
         foreach (var (name, versions) in this.FORCE_PACKAGES)
         {
-            await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgFolder, client)));
+            await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgDir)));
         }
     }
 
     private async Task GetNeeds(BuildTask task, DirectoryInfo needsDir, HashSet<BuildResult.ReviewedNeed> reviewedNeeds)
     {
-        if (task.Manifest?.Build?.Needs == null || !task.Manifest.Build.Needs.Any())
+        if (task.Manifest.Build?.Needs == null || task.Manifest.Build.Needs.Count == 0)
             return;
 
-        using var client = new HttpClient();
-        
-        foreach (var need in task.Manifest!.Build!.Needs)
+        foreach (var need in task.Manifest.Build!.Needs)
         {
-            using var response = await client.GetAsync(need.Url, HttpCompletionOption.ResponseHeadersRead);
+            using var response = await this.httpClient.GetAsync(need.Url, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
             await using var streamToReadFrom = await response.Content.ReadAsStreamAsync();
 
@@ -453,8 +462,8 @@ public class BuildProcessor
         
         var internalName = task.InternalName;
         var haveCommit = task.HaveCommit;
-        var wantCommit = task.Manifest!.Plugin.Commit;
-        var host = new Uri(task.Manifest!.Plugin.Repository);
+        var wantCommit = task.Manifest.Plugin.Commit;
+        var host = new Uri(task.Manifest.Plugin.Repository);
         const string emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
         if (string.IsNullOrEmpty(haveCommit))
@@ -522,11 +531,13 @@ public class BuildProcessor
             {
                 RedirectStandardOutput = true,
                 WorkingDirectory = workDir.FullName,
+                Environment =
+                {
+                    ["GIT_EXTERNAL_DIFF"] = "difft",
+                    ["DFT_COLOR"] = "always",
+                    ["DFT_WIDTH"] = "240"
+                }
             };
-            
-            diffPsi.Environment["GIT_EXTERNAL_DIFF"] = "difft";
-            diffPsi.Environment["DFT_COLOR"] = "always";
-            diffPsi.Environment["DFT_WIDTH"] = "240";
 
             var process = Process.Start(diffPsi);
             if (process == null)
@@ -800,7 +811,7 @@ public class BuildProcessor
         // Take care, this could still match a branch or tag name
         // Verified by CheckIfTrueCommit() later
         var gitShaRegex = new Regex("^[0-9a-f]{5,40}$");
-        if (!gitShaRegex.IsMatch(task.Manifest!.Plugin.Commit))
+        if (!gitShaRegex.IsMatch(task.Manifest.Plugin.Commit))
             throw new Exception("Provided commit hash is not a valid Git SHA.");
     }
 
@@ -808,7 +819,7 @@ public class BuildProcessor
     {
         if (this.setup.SecretsPrivateKeyBytes is null
             || this.setup.SecretsPrivateKeyPassword is null
-            || task.Manifest!.Plugin.Secrets.Count == 0)
+            || task.Manifest.Plugin.Secrets.Count == 0)
             return new Dictionary<string, string>();
 
         // Load keys
@@ -872,8 +883,8 @@ public class BuildProcessor
 
         ParanoiaValidateTask(task);
 
-        var taskFolderName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
-        var taskRootDir = this.setup.WorkFolder.CreateSubdirectory(taskFolderName);
+        var taskDirName = $"{task.InternalName}-{task.Manifest.Plugin.Commit}-{task.Channel}";
+        var taskRootDir = this.setup.WorkDirectory.CreateSubdirectory(taskDirName);
         Log.Verbose("taskRoot: {TaskRoot}", taskRootDir.FullName);
         var workDir = taskRootDir.CreateSubdirectory("work");
         var archiveDir = taskRootDir.CreateSubdirectory("archive");
@@ -881,8 +892,8 @@ public class BuildProcessor
         var packagesDir = taskRootDir.CreateSubdirectory("packages");
         var externalNeedsDir = taskRootDir.CreateSubdirectory("needs");
 
-        if (!this.setup.StaticFolder.Exists)
-            throw new Exception("Static folder does not exist");
+        if (!this.setup.StaticDirectory.Exists)
+            throw new Exception("Static directory does not exist");
 
         if (string.IsNullOrWhiteSpace(task.Manifest.Plugin.Repository))
             throw new Exception("No repository specified");
@@ -932,7 +943,7 @@ public class BuildProcessor
         
         // Create archive zip
         var archiveZipFile =
-            new FileInfo(Path.Combine(this.setup.WorkFolder.FullName, $"{taskFolderName}-{archiveDir.Name}.zip"));
+            new FileInfo(Path.Combine(this.setup.WorkDirectory.FullName, $"{taskDirName}-{archiveDir.Name}.zip"));
         ZipFile.CreateFromDirectory(archiveDir.FullName, archiveZipFile.FullName);
         
         var diff = await GetPluginDiff(workDir, task, otherTasks, !commit);
@@ -944,12 +955,12 @@ public class BuildProcessor
         await RetryUntil(async () => await GetNeeds(task, externalNeedsDir, allNeeds));
         await RetryUntil(async () => await RestoreAllPackages(workDir, packagesDir, allNeeds));
 
-        if (!string.IsNullOrEmpty(task.Manifest?.Build?.Image))
+        if (!string.IsNullOrEmpty(task.Manifest.Build?.Image))
             throw new Exception("Non-default build images are currently not supported, please reach out if you need this");
 
         var dockerEnv = new List<string>
         {
-            $"PLOGON_PROJECT_DIR={task.Manifest!.Plugin.ProjectPath}",
+            $"PLOGON_PROJECT_DIR={task.Manifest.Plugin.ProjectPath}",
             $"PLOGON_PLUGIN_NAME={task.InternalName}",
             $"PLOGON_PLUGIN_COMMIT={task.Manifest.Plugin.Commit}",
             $"PLOGON_PLUGIN_VERSION={task.Manifest.Plugin.Version}",
@@ -991,7 +1002,7 @@ public class BuildProcessor
                     {
                         $"{workDir.FullName}:/work/repo",
                         $"{dalamudAssemblyDir.FullName}:/work/dalamud:ro",
-                        $"{this.setup.StaticFolder.FullName}:/static:ro",
+                        $"{this.setup.StaticDirectory.FullName}:/static:ro",
                         $"{outputDir.FullName}:/output",
                         $"{packagesDir.FullName}:/packages:ro",
                         $"{externalNeedsDir.FullName}:/needs:ro"
@@ -1071,7 +1082,7 @@ public class BuildProcessor
 
         if (dpOutput.Exists)
         {
-            var artifact = this.setup.ArtifactFolder.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
+            var artifact = this.setup.ArtifactDirectory.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
             try
             {
                 foreach (var file in dpOutput.GetFiles())

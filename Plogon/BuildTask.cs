@@ -8,25 +8,25 @@ namespace Plogon;
 
 public class BuildTask
 {
-    public Manifest? Manifest { get; set; }
+    public Manifest Manifest { get; init; }
 
-    public string? HaveCommit { get; set; }
+    public string? HaveCommit { get; init; }
 
-    public DateTime? HaveTimeBuilt { get; set; }
+    public DateTime? HaveTimeBuilt { get; init; }
 
-    public string? HaveVersion { get; set; }
+    public string? HaveVersion { get; init; }
 
-    public string Channel { get; set; }
+    public string Channel { get; init; }
 
-    public string InternalName { get; set; }
+    public string InternalName { get; init; }
 
     // New in ANY channel
-    public bool IsNewPlugin { get; set; }
+    public bool IsNewPlugin { get; init; }
 
     // New in THIS channel
-    public bool IsNewInThisChannel { get; set; }
+    public bool IsNewInThisChannel { get; init; }
 
-    public TaskType Type { get; set; }
+    public TaskType Type { get; init; }
 
     public enum TaskType
     {
@@ -34,9 +34,9 @@ public class BuildTask
         Remove,
     }
 
-    public bool IsGitHub => Manifest != null && new Uri(Manifest.Plugin.Repository).Host == "github.com";
+    public bool IsGitHub => new Uri(Manifest.Plugin.Repository).Host == "github.com";
 
-    public bool IsGitLab => Manifest != null && new Uri(Manifest.Plugin.Repository).Host == "gitlab.com";
+    public bool IsGitLab => new Uri(Manifest.Plugin.Repository).Host == "gitlab.com";
 
-    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit ?? "?"} - {Manifest?.Plugin?.Commit ?? "?"} - {Manifest?.Directory?.FullName ?? "?"}";
+    public override string ToString() => $"{Type} - {InternalName}[{Channel}] - {HaveCommit ?? "?"} - {Manifest.Plugin.Commit}";
 }
