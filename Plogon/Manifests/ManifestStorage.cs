@@ -45,13 +45,13 @@ public class ManifestStorage
     /// Get the manifest for a specific channel and internal name.
     /// If the manifest was deleted, get the last known manifest.
     /// </summary>
-    /// <param name="channel"></param>
-    /// <param name="internalName"></param>
-    /// <returns></returns>
+    /// <param name="channel">Name of the channel to get the manifest from.</param>
+    /// <param name="internalName">Internal name of the plugin to look for.</param>
+    /// <returns>The parsed historical manifest.</returns>
     /// <exception cref="Exception">If the manifest could not be found or parsed</exception>
     public async Task<Manifest?> GetHistoricManifestAsync(string channel, string internalName)
     {
-        var formattedPath = $"\"{channel}/{internalName}/manifest.toml\"";
+        var formattedPath = $"\"{PlogonSystemDefine.ChannelIdToPath(channel)}/{internalName}/manifest.toml\"";
 
         var revHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- {formattedPath}");
         if (string.IsNullOrWhiteSpace(revHelper.StandardOutput))

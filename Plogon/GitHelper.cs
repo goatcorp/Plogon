@@ -72,6 +72,7 @@ public class GitHelper
         using var process = new Process();
         this.SetupProcess(process, arguments);
 
+        GitHubOutputBuilder.StartGroup($"git {process.StartInfo.Arguments}");
         Log.Verbose($"Executing 'git {process.StartInfo.Arguments}'");
         
         process.Start();
@@ -86,6 +87,7 @@ public class GitHelper
         Log.Verbose("git process exited with code {ExitCode}", this.ExitCode);
         Log.Verbose(this.StandardOutput);
         Log.Verbose(this.StandardError);
+        GitHubOutputBuilder.EndGroup();
 
         if (this.ExitCode != 0)
         {

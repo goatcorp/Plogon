@@ -98,4 +98,12 @@ public static class PlogonSystemDefine
     /// PR label for a plugin pending testing.
     /// </summary>
     public const string PR_LABEL_PENDING_TESTING = "pending-testing";
+    
+    /// <summary>
+    /// Transform a channel ID to a path into the repository.
+    /// Past goat was dumb as a rock and decided that we want to have channel-subfolders that magically transform to this.
+    /// </summary>
+    /// <param name="channelId">The ID of the channel.</param>
+    /// <returns>The path that can be used to get manifests.</returns>
+    public static string ChannelIdToPath(string channelId) => channelId.Replace("-", "/");
 }
