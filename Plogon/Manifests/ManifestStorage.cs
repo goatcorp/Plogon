@@ -57,7 +57,7 @@ public class ManifestStorage
         if (string.IsNullOrWhiteSpace(revHelper.StandardOutput))
             throw new Exception("Historic manifest rev not found");
         
-        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput}^:{formattedPath}");
+        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput.Trim()}^:{formattedPath}");
         return Toml.ToModel<Manifest>(manifestHelper.StandardOutput ?? throw new Exception("Could not get historic manifest content"));
     }
 
