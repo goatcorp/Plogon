@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 
+using Serilog;
+
 namespace Plogon;
 
 /// <summary>
@@ -70,6 +72,8 @@ public class GitHelper
         using var process = new Process();
         this.SetupProcess(process, arguments);
 
+        Log.Verbose($"Executing 'git {process.StartInfo.Arguments}'");
+        
         process.Start();
 
         // Read output and error streams asynchronously
@@ -78,6 +82,10 @@ public class GitHelper
 
         await process.WaitForExitAsync();
         this.ExitCode = process.ExitCode;
+        
+        Log.Verbose("git process exited with code {ExitCode}", this.ExitCode);
+        Log.Verbose(this.StandardOutput);
+        Log.Verbose(this.StandardError);
 
         if (this.ExitCode != 0)
         {
