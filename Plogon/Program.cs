@@ -186,7 +186,6 @@ class Program
                 BuildOverridesFile = buildOverridesFile,
                 SecretsPrivateKeyBytes = secretsPkBytes,
                 SecretsPrivateKeyPassword = secretsPkPassword,
-                PrDiff = prDiff,
                 AllowNonDefaultImages = mode != ModeOfOperation.Continuous, // HACK, fix it
                 HistoryS3Client = historyStorageS3Client,
                 InternalS3Client = internalS3Client,
@@ -201,7 +200,7 @@ class Program
             };
 
             var buildProcessor = new BuildProcessor(setup);
-            var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous);
+            var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous, prDiff);
             var taskToPrNumber = new Dictionary<BuildTask, int>();
 
             GitHubOutputBuilder.StartGroup("List all tasks");
@@ -275,17 +274,15 @@ class Program
                     try
                     {
                         // We'll override this with the PR body if we are committing
-                        var changelog = task.Manifest?.Plugin.Changelog;
+                        var changelog = task.Manifest.Plugin.Changelog;
                         
                         string? reviewer = null;
                         string? committingAuthor = null;
                         int? committingPrNum = null;
 
-                        var relevantCommitHashForWebServices = task.Manifest?.Plugin.Commit;
+                        var relevantCommitHashForWebServices = task.Manifest.Plugin.Commit;
                         
-                        var manifestOwners = (task.Manifest?.Plugin.Owners ?? Enumerable.Empty<string>())
-                                                                .Union(PlogonSystemDefine.PacMembers);
-
+                        var manifestOwners = task.Manifest.Plugin.Owners.Union(PlogonSystemDefine.PacMembers);
                         var isManifestOwner = manifestOwners.Any(x => x == githubActor);
                         
                         // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
@@ -353,7 +350,7 @@ class Program
                             continue;
                         }
 
-                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest!.Plugin.Commit})");
+                        GitHubOutputBuilder.StartGroup($"Build {task.InternalName}[{task.Channel}] ({task.Manifest.Plugin.Commit})");
 
                         if (!buildAll && !isManifestOwner)
                         {

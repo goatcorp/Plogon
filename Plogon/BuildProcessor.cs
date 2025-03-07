@@ -149,11 +149,6 @@ public class BuildProcessor
         /// Password for the aforementioned private key.
         /// </summary>
         public string? SecretsPrivateKeyPassword { get; init; }
-
-        /// <summary>
-        /// Diff in unified format that contains the changes requested by the PR we are running as
-        /// </summary>
-        public string? PrDiff { get; init; }
         
         /// <summary>
         /// S3 client to use for artifact uploads.
@@ -191,11 +186,11 @@ public class BuildProcessor
         this.setup = setup; 
 
         this.pluginRepository = new PluginRepository(setup.RepoDirectory);
-        this.workingManifestStorage = new ManifestStorage(setup.WorkingManifestDirectory, setup.PrDiff, true, setup.CutoffDate);
+        this.workingManifestStorage = new ManifestStorage(setup.WorkingManifestDirectory, setup.CutoffDate);
         this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, setup.WorkDirectory.CreateSubdirectory("dalamud_releases_work"));
         
         if (this.setup.MasterManifestDirectory is { Exists: true })
-            this.masterManifestStorage = new ManifestStorage(this.setup.MasterManifestDirectory, null, false, null);
+            this.masterManifestStorage = new ManifestStorage(this.setup.MasterManifestDirectory);
     }
 
     /// <summary>
@@ -233,10 +228,12 @@ public class BuildProcessor
     /// Get all tasks that need to be done
     /// </summary>
     /// <param name="continuous">If we are running a continuous verification build.</param>
+    /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR we are running as.</param>
     /// <returns>A set of tasks that are pending</returns>
-    public ISet<BuildTask> GetBuildTasks(bool continuous)
+    public ISet<BuildTask> GetBuildTasks(bool continuous, string? prDiff)
     {
         var tasks = new HashSet<BuildTask>();
+        var diffHelper = prDiff is null ? null : new DiffHelper(prDiff);
 
         foreach (var channel in this.pluginRepository.State.Channels)
         {
@@ -246,10 +243,18 @@ public class BuildProcessor
                 if (!this.workingManifestStorage.Channels.ContainsKey(channel.Key) ||
                     this.workingManifestStorage.Channels[channel.Key].All(x => x.Key != plugin.Key))
                 {
-                    var manifestBeingRemoved = this.masterManifestStorage?.GetManifest(channel.Key, plugin.Key);
+                    if (this.masterManifestStorage == null)
+                        throw new Exception("Master manifests not set up, needed to process removals");
+                    
+                    // Try to find the manifest in the master (untouched) manifests
+                    var manifestBeingRemoved = this.masterManifestStorage.GetManifest(channel.Key, plugin.Key);
                     if (manifestBeingRemoved == null)
                         throw new Exception($"Could not find manifest for plugin being removed in master manifests ({channel.Key}/{plugin.Key})");
                     
+                    // The manifest of the plugin we are removing is not in the diff
+                    if (diffHelper != null && !diffHelper.IsFileChanged(this.masterManifestStorage!.BaseDirectory, manifestBeingRemoved.File))
+                        continue;
+
                     tasks.Add(new BuildTask
                     {
                         InternalName = plugin.Key,
@@ -275,6 +280,10 @@ public class BuildProcessor
                     continue;
 
                 if (manifest.Value.Build?.Image != null && !this.setup.AllowNonDefaultImages)
+                    continue;
+                
+                // The manifest of the plugin we are building is not in the diff
+                if (diffHelper != null && !diffHelper.IsFileChanged(this.workingManifestStorage.BaseDirectory, manifest.Value.File))
                     continue;
 
                 tasks.Add(new BuildTask
@@ -1056,8 +1065,12 @@ public class BuildProcessor
         var exitCode = containerInspectResponse.State.ExitCode;
 
         Log.Information("Container for build exited, exit code: {Code}", exitCode);
+        
+        if (task.Manifest.File.Directory == null)
+            throw new Exception("Manifest had no directory set");
 
-        if (exitCode == 0 && !commit && File.Exists(Path.Combine(task.Manifest.Directory.FullName, "images", "icon.png")) == false)
+        var imagesSourcePath = Path.Combine(task.Manifest.File.Directory.FullName, "images");
+        if (exitCode == 0 && !commit && File.Exists(Path.Combine(imagesSourcePath, "icon.png")) == false)
         {
             throw new MissingIconException();
         }
@@ -1218,11 +1231,7 @@ public class BuildProcessor
                     {
                         Log.Warning("No S3 client, not uploading archive");
                     }
-                    
-                    if (task.Manifest.Directory == null)
-                        throw new Exception("Manifest had no directory set");
 
-                    var imagesSourcePath = Path.Combine(task.Manifest.Directory.FullName, "images");
                     if (Directory.Exists(imagesSourcePath))
                     {
                         var imagesDestinationPath = Path.Combine(repoOutputDir.FullName, "images");

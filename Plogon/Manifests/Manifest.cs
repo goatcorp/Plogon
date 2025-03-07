@@ -60,5 +60,5 @@ public class Manifest
 
     public PluginInfo Plugin { get; set; }
 
-    public DirectoryInfo Directory { get; set; }
+    public FileInfo File { get; set; }
 }
