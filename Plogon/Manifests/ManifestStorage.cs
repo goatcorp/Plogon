@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 using Serilog;
 
@@ -40,11 +41,24 @@ public class ManifestStorage
 
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, Manifest>> Channels { get; private set; }
     
-    public Manifest? GetManifest(string channel, string internalName)
+    /// <summary>
+    /// Get the manifest for a specific channel and internal name.
+    /// If the manifest was deleted, get the last known manifest.
+    /// </summary>
+    /// <param name="channel"></param>
+    /// <param name="internalName"></param>
+    /// <returns></returns>
+    /// <exception cref="Exception">If the manifest could not be found or parsed</exception>
+    public async Task<Manifest?> GetHistoricManifestAsync(string channel, string internalName)
     {
-        return !this.Channels.TryGetValue(channel, out var manifests) ?
-                   null :
-                   manifests.GetValueOrDefault(internalName);
+        var formattedPath = $"\"{channel}/{internalName}/manifest.toml\"";
+
+        var revHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- {formattedPath}");
+        if (string.IsNullOrWhiteSpace(revHelper.StandardOutput))
+            throw new Exception("Historic manifest rev not found");
+        
+        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput}^:{formattedPath}");
+        return Toml.ToModel<Manifest>(manifestHelper.StandardOutput ?? throw new Exception("Could not get historic manifest content"));
     }
 
     private Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory)

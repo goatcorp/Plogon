@@ -230,7 +230,7 @@ public class BuildProcessor
     /// <param name="continuous">If we are running a continuous verification build.</param>
     /// <param name="prDiff">Diff in unified format that contains the changes requested by the PR we are running as.</param>
     /// <returns>A set of tasks that are pending</returns>
-    public ISet<BuildTask> GetBuildTasks(bool continuous, string? prDiff)
+    public async Task<ISet<BuildTask>> GetBuildTasksAsync(bool continuous, string? prDiff)
     {
         var tasks = new HashSet<BuildTask>();
         var diffHelper = prDiff is null ? null : new DiffHelper(prDiff);
@@ -247,10 +247,10 @@ public class BuildProcessor
                         throw new Exception("Master manifests not set up, needed to process removals");
                     
                     // Try to find the manifest in the master (untouched) manifests
-                    var manifestBeingRemoved = this.masterManifestStorage.GetManifest(channel.Key, plugin.Key);
+                    var manifestBeingRemoved = await this.masterManifestStorage.GetHistoricManifestAsync(channel.Key, plugin.Key);
                     if (manifestBeingRemoved == null)
                         throw new Exception($"Could not find manifest for plugin being removed in master manifests ({channel.Key}/{plugin.Key})");
-                    
+
                     // The manifest of the plugin we are removing is not in the diff
                     if (diffHelper != null && !diffHelper.IsFileChanged(this.masterManifestStorage!.BaseDirectory, manifestBeingRemoved.File))
                         continue;

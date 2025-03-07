@@ -200,7 +200,7 @@ class Program
             };
 
             var buildProcessor = new BuildProcessor(setup);
-            var tasks = buildProcessor.GetBuildTasks(mode == ModeOfOperation.Continuous, prDiff);
+            var tasks = await buildProcessor.GetBuildTasksAsync(mode == ModeOfOperation.Continuous, prDiff);
             var taskToPrNumber = new Dictionary<BuildTask, int>();
 
             GitHubOutputBuilder.StartGroup("List all tasks");
