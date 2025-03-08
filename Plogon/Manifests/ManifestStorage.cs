@@ -26,11 +26,22 @@ public class ManifestStorage
         var stableDir = new DirectoryInfo(Path.Combine(this.BaseDirectory.FullName, "stable"));
         var testingDir = new DirectoryInfo(Path.Combine(this.BaseDirectory.FullName, "testing"));
 
-        channels.Add(stableDir.Name, GetManifestsInDirectory(stableDir));
+        var stableManifests = GetManifestsInDirectory(stableDir);
+        foreach (var manifest in stableManifests)
+        {
+            manifest.Value.PathInRepo = $"{stableDir.Name}/{manifest.Key}/manifest.toml";
+        }
+        
+        channels.Add(stableDir.Name, stableManifests);
 
         foreach (var testingChannelDir in testingDir.EnumerateDirectories())
         {
             var manifests = GetManifestsInDirectory(testingChannelDir);
+            foreach (var manifest in manifests)
+            {
+                manifest.Value.PathInRepo = $"{testingDir.Name}/{testingChannelDir.Name}/{manifest.Key}/manifest.toml";
+            }
+            
             channels.Add($"testing-{testingChannelDir.Name}", manifests);
         }
 
@@ -51,14 +62,17 @@ public class ManifestStorage
     /// <exception cref="Exception">If the manifest could not be found or parsed</exception>
     public async Task<Manifest?> GetHistoricManifestAsync(string channel, string internalName)
     {
-        var formattedPath = $"\"{PlogonSystemDefine.ChannelIdToPath(channel)}/{internalName}/manifest.toml\"";
+        var formattedManifestPath = $"{PlogonSystemDefine.ChannelIdToPath(channel)}/{internalName}/manifest.toml";
 
-        var revHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- {formattedPath}");
+        var revHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- \"{formattedManifestPath}\"");
         if (string.IsNullOrWhiteSpace(revHelper.StandardOutput))
             throw new Exception("Historic manifest rev not found");
         
-        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput.Trim()}^:{formattedPath}");
-        return Toml.ToModel<Manifest>(manifestHelper.StandardOutput ?? throw new Exception("Could not get historic manifest content"));
+        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput.Trim()}^:\"{formattedManifestPath}\"");
+        var manifest = Toml.ToModel<Manifest>(manifestHelper.StandardOutput ?? throw new Exception("Could not get historic manifest content"));
+        manifest.PathInRepo = formattedManifestPath;
+
+        return manifest;
     }
 
     private Dictionary<string, Manifest> GetManifestsInDirectory(DirectoryInfo directory)
@@ -101,7 +115,7 @@ public class ManifestStorage
 
                 var tomlText = tomlFile.OpenText().ReadToEnd();
                 var manifest = Toml.ToModel<Manifest>(tomlText);
-
+                
                 manifest.File = tomlFile;
                 manifests.Add(manifestDir.Name, manifest);
             }

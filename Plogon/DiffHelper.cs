@@ -28,9 +28,21 @@ public partial class DiffHelper
     /// Gets the changed files.
     /// </summary>
     public IReadOnlySet<string> ChangedFiles => changedFiles;
+    
+    /// <summary>
+    /// Check if a file is included in the diff.
+    /// The path to the file must be relative to where the diff is being applied.
+    /// </summary>
+    /// <param name="file">The file path to check for.</param>
+    /// <returns>Whether the file is included in the diff.</returns>
+    public bool IsFileChanged(string file)
+    {
+        var normalizedPath = file.Replace("\\", "/");
+        return changedFiles.Contains(normalizedPath);
+    }
 
     /// <summary>
-    /// Check whether a file is included in this diff.
+    /// Check whether an actual file on the filesystem is included in this diff.
     /// </summary>
     /// <param name="baseDirectory">The directory the diff is being applied to.</param>
     /// <param name="file">The file that we are looking for.</param>
@@ -48,6 +60,6 @@ public partial class DiffHelper
         return false;
     }
 
-    [GeneratedRegex(@"((?:\+\+\+\s+b\/)|(?:rename to\s+))(.*\.toml)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"((?:\+\+\+\s+b\/)|(?:---\s+a\/)|(?:rename to\s+))(.*\.toml)", RegexOptions.IgnoreCase)]
     private static partial Regex FileChangesRegex();
 }

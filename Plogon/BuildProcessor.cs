@@ -252,7 +252,7 @@ public class BuildProcessor
                         throw new Exception($"Could not find manifest for plugin being removed in master manifests ({channel.Key}/{plugin.Key})");
 
                     // The manifest of the plugin we are removing is not in the diff
-                    if (diffHelper != null && !diffHelper.IsFileChanged(this.masterManifestStorage!.BaseDirectory, manifestBeingRemoved.File))
+                    if (diffHelper != null && !diffHelper.IsFileChanged(manifestBeingRemoved.PathInRepo))
                         continue;
 
                     tasks.Add(new BuildTask
@@ -283,7 +283,7 @@ public class BuildProcessor
                     continue;
                 
                 // The manifest of the plugin we are building is not in the diff
-                if (diffHelper != null && !diffHelper.IsFileChanged(this.workingManifestStorage.BaseDirectory, manifest.Value.File))
+                if (diffHelper != null && !diffHelper.IsFileChanged(this.workingManifestStorage.BaseDirectory, manifest.Value.File ?? throw new Exception("No manifest file on disk")))
                     continue;
 
                 tasks.Add(new BuildTask
@@ -1066,7 +1066,7 @@ public class BuildProcessor
 
         Log.Information("Container for build exited, exit code: {Code}", exitCode);
         
-        if (task.Manifest.File.Directory == null)
+        if (task.Manifest.File?.Directory == null)
             throw new Exception("Manifest had no directory set");
 
         var imagesSourcePath = Path.Combine(task.Manifest.File.Directory.FullName, "images");

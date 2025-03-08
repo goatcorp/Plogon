@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization;
+
 #pragma warning disable CS1591
 #pragma warning disable CS8618
 
@@ -60,5 +60,13 @@ public class Manifest
 
     public PluginInfo Plugin { get; set; }
 
-    public FileInfo File { get; set; }
+    /// <summary>
+    /// File on disk. May be null if this manifest isn't actually on disk (=historical)
+    /// </summary>
+    public FileInfo? File { get; set; }
+    
+    /// <summary>
+    /// Path to the manifest in the repo it was loaded from (e.g. "stable/MyPlugin/manifest.toml")
+    /// </summary>
+    public string PathInRepo { get; set; }
 }
