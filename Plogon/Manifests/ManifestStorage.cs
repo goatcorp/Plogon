@@ -64,11 +64,26 @@ public class ManifestStorage
     {
         var formattedManifestPath = $"{PlogonSystemDefine.ChannelIdToPath(channel)}/{internalName}/manifest.toml";
 
-        var revHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- \"{formattedManifestPath}\"");
-        if (string.IsNullOrWhiteSpace(revHelper.StandardOutput))
+        var revListHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"rev-list -n 1 HEAD -- \"{formattedManifestPath}\"");
+        if (string.IsNullOrWhiteSpace(revListHelper.StandardOutput))
             throw new Exception("Historic manifest rev not found");
         
-        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show {revHelper.StandardOutput.Trim()}^:\"{formattedManifestPath}\"");
+        var commit = revListHelper.StandardOutput.Trim();
+        try
+        {
+            await GitHelper.ExecuteAsync(this.BaseDirectory, 
+                                         $"rev-parse --quiet --verify \"{commit}:{formattedManifestPath}\" ");
+        }
+        catch (GitHelper.GitCommandException ex)
+        {
+            // 1 means the file was deleted, so we need the parent commit
+            if (ex.ExitCode != 1)
+                throw;
+            
+            commit += "^";
+        }
+        
+        var manifestHelper = await GitHelper.ExecuteAsync(this.BaseDirectory, $"show \"{commit}:{formattedManifestPath}\"");
         var manifest = Toml.ToModel<Manifest>(manifestHelper.StandardOutput ?? throw new Exception("Could not get historic manifest content"));
         manifest.PathInRepo = formattedManifestPath;
 
