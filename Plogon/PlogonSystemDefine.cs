@@ -18,7 +18,7 @@ public static class PlogonSystemDefine
         "goaaats",
         "reiichi001",
         "perchbirdd",
-        "ackwell",
+        "Critical-Impact",
         "karashiiro",
         "philpax",
     ];
