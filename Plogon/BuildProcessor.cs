@@ -55,7 +55,7 @@ public class BuildProcessor
     private readonly ManifestStorage? masterManifestStorage;
 
     private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "8.0.404";
+    private const string DOCKER_TAG = "9.0.202";
 
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
@@ -76,6 +76,9 @@ public class BuildProcessor
         },
         { 
             "net8.0", ["8.0.0"]
+        },
+        { 
+            "net9.0", ["9.0.3"]
         }
     };
 
