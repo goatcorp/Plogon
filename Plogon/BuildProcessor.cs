@@ -979,6 +979,18 @@ public class BuildProcessor
             "DALAMUD_LIB_PATH=/work/dalamud/"
         };
 
+        // Error out for badly capitalized Dalamud.NET.Sdk references
+        foreach (var csprojFile in workDir.GetFiles("*.csproj", SearchOption.AllDirectories))
+        {
+            var content = csprojFile.OpenText().ReadToEnd();
+            
+            // Check if the file contains a reference to Dalamud.NET.Sdk with different casing then the one we expect
+            if (content.Contains("Dalamud.NET.Sdk", StringComparison.OrdinalIgnoreCase) && !content.Contains("Dalamud.NET.Sdk", StringComparison.Ordinal))
+            {
+                throw new Exception("Dalamud.NET.Sdk reference in csproj file is not correctly capitalized.");
+            }
+        }
+
         // Decrypt secrets and add them as env vars to the container, so that msbuild can see them
         var secrets = await DecryptSecrets(task);
         foreach (var secret in secrets)
