@@ -980,14 +980,17 @@ public class BuildProcessor
         };
 
         // Error out for badly capitalized Dalamud.NET.Sdk references
-        foreach (var csprojFile in workDir.GetFiles("*.csproj", SearchOption.AllDirectories))
+        if (!commit)
         {
-            var content = csprojFile.OpenText().ReadToEnd();
-            
-            // Check if the file contains a reference to Dalamud.NET.Sdk with different casing then the one we expect
-            if (content.Contains("Dalamud.NET.Sdk", StringComparison.OrdinalIgnoreCase) && !content.Contains("Dalamud.NET.Sdk", StringComparison.Ordinal))
+            foreach (var csprojFile in workDir.GetFiles("*.csproj", SearchOption.AllDirectories))
             {
-                throw new Exception("Dalamud.NET.Sdk reference in csproj file is not correctly capitalized.");
+                var content = csprojFile.OpenText().ReadToEnd();
+            
+                // Check if the file contains a reference to Dalamud.NET.Sdk with different casing then the one we expect
+                if (content.Contains("Dalamud.NET.Sdk", StringComparison.OrdinalIgnoreCase) && !content.Contains("Dalamud.NET.Sdk", StringComparison.Ordinal))
+                {
+                    throw new Exception("Dalamud.NET.Sdk reference in csproj file is not correctly capitalized.");
+                }
             }
         }
 
