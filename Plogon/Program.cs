@@ -567,7 +567,7 @@ class Program
                     }
 
                     // List needs in detail
-                    var allNeeds = allResults.SelectMany(x => x.Needs).ToList();
+                    var allNeeds = allResults.SelectMany(x => x.Needs).Distinct().ToList();
                     var needsText = string.Empty;
                     if (allNeeds.Count > 0)
                     {
