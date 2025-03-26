@@ -88,7 +88,7 @@ public class BuildProcessor
     private readonly Dictionary<string, string[]> FORCE_PACKAGES = new()
     {
         {
-            "Dalamud.NET.Sdk", ["11.0.0", "11.2.0"]
+            "Dalamud.NET.Sdk", ["12.0.0", "12.0.1", "12.0.2"]
         },
     };
     
