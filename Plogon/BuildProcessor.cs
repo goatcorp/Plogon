@@ -52,15 +52,15 @@ public class BuildProcessor
     private readonly DalamudReleases dalamudReleases;
     
     private readonly ManifestStorage workingManifestStorage;
-    private readonly ManifestStorage? masterManifestStorage;
+    private readonly ManifestStorage masterManifestStorage;
 
-    private const string DOCKER_IMAGE = "mcr.microsoft.com/dotnet/sdk";
-    private const string DOCKER_TAG = "9.0.202";
+    private const string DockerImage = "mcr.microsoft.com/dotnet/sdk";
+    private const string DockerTag = "9.0.202";
 
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
     // If a plugin breaks with a missing runtime package you might want to add the package here.
-    private readonly Dictionary<string, string[]> RUNTIME_PACKAGES = new()
+    private readonly Dictionary<string, string[]> runtimePackages = new()
     {
         { 
             ".NETStandard,Version=v2.0", ["2.0.0"]
@@ -85,7 +85,7 @@ public class BuildProcessor
     // This field specifies a list of packages that must be present in the package cache, no matter
     // whether they are present in the lockfile. This is necessary for SDK packages, as they are not
     // added to lockfiles.
-    private readonly Dictionary<string, string[]> FORCE_PACKAGES = new()
+    private readonly Dictionary<string, string[]> forcePackages = new()
     {
         {
             "Dalamud.NET.Sdk", ["12.0.2"]
@@ -111,7 +111,7 @@ public class BuildProcessor
         /// When running for a PR, directory containing the current, unmodified manifests.
         /// Used to determine the owners of a manifest if it was removed.
         /// </summary>
-        public DirectoryInfo? MasterManifestDirectory { get; set; }
+        public DirectoryInfo MasterManifestDirectory { get; set; }
 
         /// <summary>
         /// Directory builds will be made in.
@@ -190,10 +190,8 @@ public class BuildProcessor
 
         this.pluginRepository = new PluginRepository(setup.RepoDirectory);
         this.workingManifestStorage = new ManifestStorage(setup.WorkingManifestDirectory, setup.CutoffDate);
+        this.masterManifestStorage = new ManifestStorage(this.setup.MasterManifestDirectory);
         this.dalamudReleases = new DalamudReleases(setup.BuildOverridesFile, setup.WorkDirectory.CreateSubdirectory("dalamud_releases_work"));
-        
-        if (this.setup.MasterManifestDirectory is { Exists: true })
-            this.masterManifestStorage = new ManifestStorage(this.setup.MasterManifestDirectory);
     }
 
     /// <summary>
@@ -204,8 +202,8 @@ public class BuildProcessor
     {
         await this.dockerClient.Images.CreateImageAsync(new ImagesCreateParameters
         {
-            FromImage = DOCKER_IMAGE,
-            Tag = DOCKER_TAG,
+            FromImage = DockerImage,
+            Tag = DockerTag,
         }, null,
             new Progress<JSONMessage>(progress =>
             {
@@ -288,6 +286,16 @@ public class BuildProcessor
                 // The manifest of the plugin we are building is not in the diff
                 if (diffHelper != null && !diffHelper.IsFileChanged(this.workingManifestStorage.BaseDirectory, manifest.Value.File ?? throw new Exception("No manifest file on disk")))
                     continue;
+                
+                // Attach new owners if they have changed
+                List<string>? oldOwners = null;
+                if (this.masterManifestStorage.Channels[channel.Key].TryGetValue(manifest.Key, out var masterManifest))
+                {
+                    if (!masterManifest.Plugin.Owners.OrderBy(x => x).SequenceEqual(manifest.Value.Plugin.Owners.OrderBy(x => x)))
+                    {
+                        oldOwners = manifest.Value.Plugin.Owners;
+                    }
+                }
 
                 tasks.Add(new BuildTask
                 {
@@ -300,6 +308,7 @@ public class BuildProcessor
                     IsNewPlugin = state == null && !isInAnyChannel,
                     IsNewInThisChannel = state == null && isInAnyChannel,
                     Type = BuildTask.TaskType.Build,
+                    OldOwners = oldOwners,
                 });
             }
         }
@@ -382,7 +391,7 @@ public class BuildProcessor
             Log.Warning(e, "Failed to fetch runtime dependency");
         }
 
-        foreach (var (name, versions) in this.FORCE_PACKAGES)
+        foreach (var (name, versions) in this.forcePackages)
         {
             await Task.WhenAll(versions.Select(version => GetDependency(name, new() { Resolved = version }, pkgDir)));
         }
@@ -678,7 +687,7 @@ public class BuildProcessor
             var runtimeId = runtime.Key.Split('/').ElementAtOrDefault(1);
 
             // add runtime packages to dependency list
-            if (!RUNTIME_PACKAGES.TryGetValue(key, out string[]? versions))
+            if (!this.runtimePackages.TryGetValue(key, out string[]? versions))
             {
                 throw new ArgumentOutOfRangeException($"Unknown runtime requested: {runtime}");
             }
@@ -1014,7 +1023,7 @@ public class BuildProcessor
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
-                Image = $"{DOCKER_IMAGE}:{DOCKER_TAG}",
+                Image = $"{DockerImage}:{DockerTag}",
 
                 NetworkDisabled = true,
 
