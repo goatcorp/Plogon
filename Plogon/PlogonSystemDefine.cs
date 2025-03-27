@@ -25,6 +25,8 @@ public static class PlogonSystemDefine
 
     /// <summary>
     /// Nuget namespaces we know are safe and don't want to see every time.
+    /// Note that we ONLY want to add VERIFIED namespaces here! If they are not verified,
+    /// people can create as many packages as they want under that namespace.
     /// </summary>
     public static readonly string[] SafeNugetNamespaces =
     [
@@ -50,6 +52,7 @@ public static class PlogonSystemDefine
 
     /// <summary>
     /// Nuget packages we know are safe and don't want to see every time.
+    /// This only applies to actual, full package names.
     /// </summary>
     public static readonly string[] SafeNugetPackages =
     [
