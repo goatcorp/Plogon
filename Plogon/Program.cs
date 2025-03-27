@@ -377,23 +377,22 @@ class Program
                         allResults.Add(buildResult);
 
                         var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;
+                        var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
+                        var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
+                                                  ? string.Empty
+                                                  : $", prev. {buildResult.PreviousVersion}";
+                        var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
+                                           $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
+                            
+                        if (buildResult.Diff?.SemanticDiffLink != null)
+                        {
+                            diffLink += $" - [Semantic]({buildResult.Diff.SemanticDiffLink})";
+                        }
                         
                         if (buildResult.Success)
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
                                 task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", buildResult.Diff?.LinesAdded ?? -1, buildResult.Diff?.LinesRemoved ?? -1);
-
-                            var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
-                            var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
-                                ? string.Empty
-                                : $", prev. {buildResult.PreviousVersion}";
-                            var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
-                                               $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
-                            
-                            if (buildResult.Diff?.SemanticDiffLink != null)
-                            {
-                                diffLink += $" - [Semantic]({buildResult.Diff.SemanticDiffLink})";
-                            }
 
                             // We don't want to indicate success for continuous builds
                             if (mode != ModeOfOperation.Continuous)
@@ -460,7 +459,7 @@ class Program
                                 task.Manifest.Plugin.Commit);
 
                             buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                $"Build failed ([Diff]({mainDiffUrl}))");
+                                $"Build failed - {diffLink}");
                             numFailed++;
                         }
                     }
