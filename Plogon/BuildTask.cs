@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Plogon.Manifests;
 #pragma warning disable CS8618
@@ -27,6 +28,11 @@ public class BuildTask
     public bool IsNewInThisChannel { get; init; }
 
     public TaskType Type { get; init; }
+    
+    /// <summary>
+    /// Set of old owners for the plugin, if they have changed.
+    /// </summary>
+    public List<string>? OldOwners { get; init; }
 
     public enum TaskType
     {

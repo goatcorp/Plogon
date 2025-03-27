@@ -63,7 +63,7 @@ class Program
     static async Task Main(
         DirectoryInfo outputFolder,
         DirectoryInfo manifestFolder,
-        DirectoryInfo? masterManifestFolder,
+        DirectoryInfo masterManifestFolder,
         DirectoryInfo workFolder,
         DirectoryInfo staticFolder,
         DirectoryInfo artifactFolder,
@@ -378,22 +378,22 @@ class Program
 
                         var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;
 
+                        var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
+                        var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
+                                                  ? string.Empty
+                                                  : $", prev. {buildResult.PreviousVersion}";
+                        var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
+                                           $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
+                            
+                        if (buildResult.Diff?.SemanticDiffLink != null)
+                        {
+                            diffLink += $" - [Semantic]({buildResult.Diff.SemanticDiffLink})";
+                        }
+                        
                         if (buildResult.Success)
                         {
                             Log.Information("Built: {Name} - {Sha} - {DiffUrl} +{LinesAdded} -{LinesRemoved}", task.InternalName,
                                 task.Manifest.Plugin.Commit, mainDiffUrl ?? "null", buildResult.Diff?.LinesAdded ?? -1, buildResult.Diff?.LinesRemoved ?? -1);
-
-                            var linesAddedText = buildResult.Diff?.LinesAdded == null ? "?" : buildResult.Diff.LinesAdded.ToString();
-                            var prevVersionText = string.IsNullOrEmpty(buildResult.PreviousVersion)
-                                ? string.Empty
-                                : $", prev. {buildResult.PreviousVersion}";
-                            var diffLink = mainDiffUrl == null ? $"[Repo]({url}) <sup><sup>(New plugin)</sup></sup>" :
-                                               $"[Diff]({mainDiffUrl}) <sup><sub>({linesAddedText} lines{prevVersionText})</sub></sup>";
-
-                            if (buildResult.Diff?.SemanticDiffLink != null)
-                            {
-                                diffLink += $" - [Semantic]({buildResult.Diff.SemanticDiffLink})";
-                            }
 
                             // We don't want to indicate success for continuous builds
                             if (mode != ModeOfOperation.Continuous)
@@ -460,7 +460,7 @@ class Program
                                 task.Manifest.Plugin.Commit);
 
                             buildsMd.AddRow("❌", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                $"Build failed ([Diff]({mainDiffUrl}))");
+                                $"Build failed - {diffLink}");
                             numFailed++;
                         }
                     }
@@ -545,6 +545,18 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
+                    var tasksWithChangedOwners = tasks.Where(x => x.OldOwners != null).ToList();
+                    if (tasksWithChangedOwners.Count != 0)
+                    {
+                        commentText +=
+                            "\n\n<br>\n\n⚠️ **New owners detected!** Please make sure that the old owners are aware of the changes and have reviewed them.";
+                        foreach (var task in tasksWithChangedOwners)
+                        {
+                            commentText += $"\n* **{task.InternalName}** - {string.Join(", ", task.OldOwners!)} => {string.Join(", ", task.Manifest.Plugin.Owners)}";
+                        }
+                        commentText += "\n\n<br>\n\n";
+                    }
+                  
                     var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNumber.Value);
 
                     var anyComments = true;
