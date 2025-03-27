@@ -548,11 +548,12 @@ class Program
                     if (tasksWithChangedOwners.Count != 0)
                     {
                         commentText +=
-                            "\n\n⚠️ **New owners detected!** Please make sure that the old owners are aware of the changes and have reviewed them.";
+                            "\n\n<br>\n\n⚠️ **New owners detected!** Please make sure that the old owners are aware of the changes and have reviewed them.";
                         foreach (var task in tasksWithChangedOwners)
                         {
                             commentText += $"\n* **{task.InternalName}** - {string.Join(", ", task.OldOwners!)} => {string.Join(", ", task.Manifest.Plugin.Owners)}";
                         }
+                        commentText += "\n\n<br>\n\n";
                     }
                     
                     var crossOutTask = gitHubApi?.CrossOutAllOfMyComments(prNumber.Value);

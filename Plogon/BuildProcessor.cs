@@ -293,7 +293,7 @@ public class BuildProcessor
                 {
                     if (!masterManifest.Plugin.Owners.OrderBy(x => x).SequenceEqual(manifest.Value.Plugin.Owners.OrderBy(x => x)))
                     {
-                        oldOwners = manifest.Value.Plugin.Owners;
+                        oldOwners = masterManifest.Plugin.Owners;
                     }
                 }
 
