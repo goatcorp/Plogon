@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -1020,6 +1021,14 @@ public class BuildProcessor
             Log.Verbose("Added secret {Name}", secretName);
         }
 
+        // We need to run the container as the same user as the host, so that we can delete files it creates
+        var userStr = string.Empty;
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            var userInfo = UnixHelper.GetUidGid();
+            userStr = $"{userInfo.Uid}:{userInfo.Gid}";
+        }
+        
         var containerCreateResponse = await this.dockerClient.Containers.CreateContainerAsync(
             new CreateContainerParameters
             {
@@ -1048,7 +1057,9 @@ public class BuildProcessor
                 Entrypoint = new List<string>
                 {
                     "/static/entrypoint.sh"
-                }
+                },
+                
+                User = userStr,
             });
 
         var startResponse =
