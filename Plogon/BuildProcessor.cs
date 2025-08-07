@@ -44,7 +44,9 @@ public class BuildProcessor
     private static readonly string[] DalamudInternalDll =
     [
         "Dalamud.dll",
-        "ImGui.NET.dll",
+        "Dalamud.Bindings.ImGui.dll",
+        "Dalamud.Bindings.ImGuizmo.dll",
+        "Dalamud.Bindings.ImPlot.dll",
         "ImGuiScene.dll"
     ];
 
@@ -88,7 +90,7 @@ public class BuildProcessor
     private readonly Dictionary<string, string[]> forcePackages = new()
     {
         {
-            "Dalamud.NET.Sdk", ["12.0.2"]
+            "Dalamud.NET.Sdk", ["13.0.0"]
         },
     };
     
