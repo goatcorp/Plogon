@@ -4,7 +4,7 @@ A build tool for Dalamud plugins. It handles build and continuous integration ta
 
 ## Usage
 
-Plogon can be run on both Windows and Linux systems, and needs .NET 6.0 and Docker installed to function.
+Plogon can be run on both Windows and Linux systems, and needs .NET 8.0 and Docker installed to function.
 
 **Note:** If the Docker connection fails, make sure you're not using Podman as the C# Docker API doesn't seem to work with it yet.
 
