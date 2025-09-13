@@ -361,7 +361,7 @@ public class BuildProcessor
         var lockFiles = localWorkDir.GetFiles("packages.lock.json", SearchOption.AllDirectories);
 
         if (lockFiles.Length == 0)
-            throw new Exception("No lockfiles present - please set \"RestorePackagesWithLockFile\" to true in your project file!");
+            throw new Exception("No lockfiles present - please ensure that `packages.lock.json` has been committed to the repository/has not been ignored!");
 
         HashSet<Tuple<string, string>> runtimeDependencies = [];
         foreach (var file in lockFiles)
