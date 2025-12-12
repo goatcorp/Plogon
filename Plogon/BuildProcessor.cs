@@ -57,7 +57,7 @@ public class BuildProcessor
     private readonly ManifestStorage masterManifestStorage;
 
     private const string DockerImage = "mcr.microsoft.com/dotnet/sdk";
-    private const string DockerTag = "9.0.202";
+    private const string DockerTag = "10.0.100";
 
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
@@ -81,6 +81,9 @@ public class BuildProcessor
         },
         { 
             "net9.0", ["9.0.3"]
+        },
+        { 
+            "net10.0", ["10.0.0"]
         }
     };
 
