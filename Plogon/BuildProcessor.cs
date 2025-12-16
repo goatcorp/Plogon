@@ -93,7 +93,7 @@ public class BuildProcessor
     private readonly Dictionary<string, string[]> forcePackages = new()
     {
         {
-            "Dalamud.NET.Sdk", ["13.0.0", "13.1.0"]
+            "Dalamud.NET.Sdk", ["14.0.0"]
         },
     };
     
