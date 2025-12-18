@@ -57,7 +57,7 @@ public class BuildProcessor
     private readonly ManifestStorage masterManifestStorage;
 
     private const string DockerImage = "mcr.microsoft.com/dotnet/sdk";
-    private const string DockerTag = "10.0.100";
+    private const string DockerTag = "10.0.101";
 
     // This field specifies which dependency package is to be fetched depending on the .net target framework.
     // The values to use in turn depend on the used SDK (see DOCKER_TAG) and what gets resolved at compile time.
@@ -93,7 +93,7 @@ public class BuildProcessor
     private readonly Dictionary<string, string[]> forcePackages = new()
     {
         {
-            "Dalamud.NET.Sdk", ["14.0.0"]
+            "Dalamud.NET.Sdk", ["14.0.1"]
         },
     };
     
