@@ -282,7 +282,7 @@ class Program
 
                         var relevantCommitHashForWebServices = task.Manifest.Plugin.Commit;
 
-                        var manifestOwners = task.Manifest.Plugin.Owners.Union(PlogonSystemDefine.PacMembers);
+                        var manifestOwners = task.Manifest.Plugin.AllContributors.Union(PlogonSystemDefine.PacMembers);
                         var isManifestOwner = manifestOwners.Any(x => x == githubActor);
 
                         // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
@@ -545,14 +545,14 @@ class Program
                         commentText =
                             "⚠️ No builds attempted! This probably means that your owners property is misconfigured.";
 
-                    var tasksWithChangedOwners = tasks.Where(x => x.OldOwners != null).ToList();
+                    var tasksWithChangedOwners = tasks.Where(x => x.OldContributors != null).ToList();
                     if (tasksWithChangedOwners.Count != 0)
                     {
                         commentText +=
                             "\n\n<br>\n\n⚠️ **New owners detected!** Please make sure that the old owners are aware of the changes and have reviewed them.";
                         foreach (var task in tasksWithChangedOwners)
                         {
-                            commentText += $"\n* **{task.InternalName}** - {string.Join(", ", task.OldOwners!)} => {string.Join(", ", task.Manifest.Plugin.Owners)}";
+                            commentText += $"\n* **{task.InternalName}** - {string.Join(", ", task.OldContributors!)} => {string.Join(", ", task.Manifest.Plugin.AllContributors)}";
                         }
                         commentText += "\n\n<br>\n\n";
                     }

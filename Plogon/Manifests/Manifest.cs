@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 #pragma warning disable CS1591
 #pragma warning disable CS8618
@@ -10,12 +11,6 @@ public class Manifest
 {
     public class PluginInfo
     {
-        public PluginInfo()
-        {
-            this.Owners = new List<string>();
-            this.Secrets = new Dictionary<string, string>();
-        }
-
         public string Repository { get; set; }
 
         public string Commit { get; set; }
@@ -28,9 +23,13 @@ public class Manifest
 
         public string MinimumVersion { get; set; }
         
-        public List<string> Owners { get; set; }
+        public List<string> Owners { get; set; } = [];
 
-        public Dictionary<string, string> Secrets { get; set; }
+        public List<string> Maintainers { get; set; } = [];
+
+        public IEnumerable<string> AllContributors => Owners.Concat(Maintainers).Distinct();
+
+        public Dictionary<string, string> Secrets { get; set; } = new();
     }
 
     public class BuildInfo

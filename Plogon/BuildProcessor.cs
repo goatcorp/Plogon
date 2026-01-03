@@ -293,12 +293,12 @@ public class BuildProcessor
                     continue;
                 
                 // Attach new owners if they have changed
-                List<string>? oldOwners = null;
+                List<string>? oldContributors = null;
                 if (this.masterManifestStorage.Channels[channel.Key].TryGetValue(manifest.Key, out var masterManifest))
                 {
-                    if (!masterManifest.Plugin.Owners.OrderBy(x => x).SequenceEqual(manifest.Value.Plugin.Owners.OrderBy(x => x)))
+                    if (!masterManifest.Plugin.AllContributors.OrderBy(x => x).SequenceEqual(manifest.Value.Plugin.AllContributors.OrderBy(x => x)))
                     {
-                        oldOwners = masterManifest.Plugin.Owners;
+                        oldContributors = masterManifest.Plugin.AllContributors.ToList();
                     }
                 }
 
@@ -313,7 +313,7 @@ public class BuildProcessor
                     IsNewPlugin = state == null && !isInAnyChannel,
                     IsNewInThisChannel = state == null && isInAnyChannel,
                     Type = BuildTask.TaskType.Build,
-                    OldOwners = oldOwners,
+                    OldContributors = oldContributors,
                 });
             }
         }

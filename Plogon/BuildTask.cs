@@ -32,7 +32,7 @@ public class BuildTask
     /// <summary>
     /// Set of old owners for the plugin, if they have changed.
     /// </summary>
-    public List<string>? OldOwners { get; init; }
+    public List<string>? OldContributors { get; init; }
 
     public enum TaskType
     {
