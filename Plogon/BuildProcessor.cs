@@ -83,7 +83,7 @@ public class BuildProcessor
             "net9.0", ["9.0.3"]
         },
         { 
-            "net10.0", ["10.0.0"]
+            "net10.0", ["10.0.2"]
         }
     };
 
