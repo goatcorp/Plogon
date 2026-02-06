@@ -21,6 +21,7 @@ public static class PlogonSystemDefine
         "Critical-Impact",
         "karashiiro",
         "philpax",
+        "nebel"
     ];
 
     /// <summary>
