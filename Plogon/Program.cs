@@ -235,7 +235,8 @@ class Program
                 githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
-
+                var previews = new List<(BuildTask Task, string Changelog, string ChangelogSource, string Description)>();
+                
                 // label flags
                 var prLabels = GitHubApi.PrLabel.None;
 
@@ -275,6 +276,7 @@ class Program
                     {
                         // We'll override this with the PR body if we are committing
                         var changelog = task.Manifest.Plugin.Changelog;
+                        var changelogSource = "TOML manifest";
 
                         string? reviewer = null;
                         string? committingAuthor = null;
@@ -306,9 +308,10 @@ class Program
                             taskToPrNumber.Add(task, committingPrNum.Value);
 
                             var prInfo = await gitHubApi!.GetPullRequestInfo(committingPrNum.Value);
-                            if (string.IsNullOrEmpty(changelog))
+                            if (string.IsNullOrEmpty(changelog) && !string.IsNullOrEmpty(prInfo.Body))
                             {
                                 changelog = prInfo.Body;
+                                changelogSource = "PR body";
                             }
 
                             committingAuthor = prInfo.Author;
@@ -399,16 +402,16 @@ class Program
                             if (mode != ModeOfOperation.Continuous)
                             {
                                 if (task.HaveVersion != null &&
-                                    Version.Parse(buildResult.Version!) <= Version.Parse(task.HaveVersion))
+                                    Version.Parse(buildResult.LegacyManifest!.AssemblyVersion!) <= Version.Parse(task.HaveVersion))
                                 {
                                     buildsMd.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                        $"{(buildResult.Version == task.HaveVersion ? "Same" : "Lower")} version!!! v{buildResult.Version} - {diffLink}");
+                                        $"{(buildResult.LegacyManifest!.AssemblyVersion == task.HaveVersion ? "Same" : "Lower")} version!!! v{buildResult.LegacyManifest!.AssemblyVersion} - {diffLink}");
                                     prLabels |= GitHubApi.PrLabel.VersionConflict;
                                 }
                                 else
                                 {
                                     buildsMd.AddRow("✔️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                                        $"v{buildResult.Version} - {diffLink}");
+                                        $"v{buildResult.LegacyManifest!.AssemblyVersion} - {diffLink}");
                                 }
                             }
 
@@ -428,30 +431,39 @@ class Program
                                 else if (!prLabels.HasFlag(GitHubApi.PrLabel.SizeMid) && !prLabels.HasFlag(GitHubApi.PrLabel.SizeLarge))
                                     prLabels |= GitHubApi.PrLabel.SizeSmall;
                             }
+                            
+                            if (mode == ModeOfOperation.Commit && committingPrNum == null)
+                                throw new Exception("No PR number for commit");
 
+                            // Let's try getting the changelog again here in case we didn't get it the first time around
+                            if (string.IsNullOrEmpty(changelog) && repoName != null &&
+                                gitHubApi != null)
+                            {
+                                (_, changelog) = await gitHubApi.GetPullRequestInfo(committingPrNum ?? prNumber ?? throw new Exception("No PR number"));
+                                if (!string.IsNullOrEmpty(changelog))
+                                {
+                                    changelogSource = "PR Body";
+                                }
+                            }
+                            
+                            previews.Add((task, changelog, changelogSource, buildResult.LegacyManifest!.Description!));
+                            
                             if (mode == ModeOfOperation.Commit)
                             {
-                                if (committingPrNum == null)
-                                    throw new Exception("No PR number for commit");
-
-                                // Let's try getting the changelog again here in case we didn't get it the first time around
-                                if (string.IsNullOrEmpty(changelog) && repoName != null &&
-                                    gitHubApi != null)
-                                {
-                                    (_, changelog) = await gitHubApi.GetPullRequestInfo(committingPrNum.Value);
-                                }
-
                                 await webservices.StagePluginBuild(new WebServices.StagedPluginInfo
                                 {
                                     InternalName = task.InternalName,
-                                    Version = buildResult.Version!,
+                                    Version = buildResult.LegacyManifest!.AssemblyVersion!,
                                     Dip17Track = task.Channel,
-                                    PrNumber = committingPrNum.Value,
+                                    PrNumber = committingPrNum!.Value,
                                     Changelog = changelog,
                                     IsInitialRelease = task.IsNewPlugin,
                                     DiffLinesAdded = buildResult.Diff?.LinesAdded,
                                     DiffLinesRemoved = buildResult.Diff?.LinesRemoved,
                                 });
+                                
+                                Log.Information("Staged build for {Name} - {Sha} (PR #{PrNum})", task.InternalName,
+                                    task.Manifest.Plugin.Commit, committingPrNum.Value);
                             }
                         }
                         else
@@ -577,6 +589,24 @@ class Program
                         mergeTimeText =
                             $"\nThe average merge time for plugin updates is currently {timeText}.";
                     }
+                    
+                    // Preview icon, punchline, description and changelog
+                    var previewText = string.Empty;
+                    if (previews.Count > 0)
+                    {
+                        previewText =
+                            $"\n\n<details>\n<summary>Preview (Listing & Changelog)</summary>\n\n";
+                        
+                        foreach (var preview in previews)
+                        {
+                            previewText +=
+                                $"\n\n### {preview.Task.InternalName} [{preview.Task.Channel}]\n\n" +
+                                $"**Description:** {preview.Description}\n\n" +
+                                $"**Changelog (from {preview.ChangelogSource}):**\n\n{preview.Changelog}\n\n";
+                        }
+                        
+                        previewText += "</details>\n\n";
+                    }
 
                     // List needs in detail
                     var allNeeds = allResults.SelectMany(x => x.Needs).Distinct().ToList();
@@ -645,7 +675,7 @@ class Program
                     }
 
                     var commentTask = gitHubApi?.AddComment(prNumber.Value,
-                        commentText + mergeTimeText + "\n\n" + buildsMd + needsText + "\n##### " + links);
+                        commentText + mergeTimeText + "\n\n" + buildsMd + previewText + needsText + "\n##### " + links);
 
                     if (commentTask != null)
                         await commentTask;

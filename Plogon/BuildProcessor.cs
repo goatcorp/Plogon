@@ -729,17 +729,17 @@ public class BuildProcessor
         /// </summary>
         /// <param name="success">If it worked</param>
         /// <param name="diff">diff url</param>
-        /// <param name="version">plugin version</param>
         /// <param name="task">processed task</param>
         /// <param name="needs">List of needs</param>
-        public BuildResult(bool success, PluginDiffSet? diff, string? version, BuildTask task, IEnumerable<ReviewedNeed> needs)
+        /// <param name="legacyManifest">Legacy manifest</param>
+        public BuildResult(bool success, PluginDiffSet? diff, BuildTask task, IEnumerable<ReviewedNeed> needs, LegacyPluginManifest? legacyManifest)
         {
             this.Success = success;
             this.Diff = diff;
-            this.Version = version;
             this.PreviousVersion = task.HaveVersion;
             this.Task = task;
             this.Needs = needs;
+            this.LegacyManifest = legacyManifest;
         }
 
         /// <summary>
@@ -751,11 +751,6 @@ public class BuildProcessor
         /// Where the diff is
         /// </summary>
         public PluginDiffSet? Diff { get; private set; }
-
-        /// <summary>
-        /// The version of the plugin artifact
-        /// </summary>
-        public string? Version { get; private set; }
 
         /// <summary>
         /// The previous version of this plugin in this channel
@@ -782,6 +777,11 @@ public class BuildProcessor
         /// Needs of this plugin to be displayed to a reviewer.
         /// </summary>
         public IEnumerable<ReviewedNeed> Needs { get; set; }
+        
+        /// <summary>
+        /// Legacy manifest.
+        /// </summary>
+        public LegacyPluginManifest? LegacyManifest { get; set; }
     }
 
     private class NeedComparer : IEqualityComparer<BuildResult.ReviewedNeed>
@@ -800,16 +800,40 @@ public class BuildProcessor
         }
     }
     
-    private class LegacyPluginManifest
+    /// <summary>
+    /// Class representing a legacy JSON plugin manifest as read by the game.
+    /// </summary>
+    public class LegacyPluginManifest
     {
+        /// <summary>
+        /// The version of the plugin.
+        /// </summary>
         [JsonProperty]
         public string? AssemblyVersion { get; set; }
 
+        /// <summary>
+        /// The internal name of the plugin.
+        /// </summary>
         [JsonProperty]
         public string? InternalName { get; set; }
         
+        /// <summary>
+        /// The API level the plugin was built with.
+        /// </summary>
         [JsonProperty]
         public int? DalamudApiLevel { get; set; }
+        
+        /// <summary>
+        /// The punchline that will be shown.
+        /// </summary>
+        [JsonProperty]
+        public string? Punchline { get; set; }
+        
+        /// <summary>
+        /// The description that will be shown.
+        /// </summary>
+        [JsonProperty]
+        public string? Description { get; set; }
     }
 
     private static async Task RetryUntil(Func<Task> what, int maxTries = 10)
@@ -898,7 +922,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, null, task, []);
+            return new BuildResult(true, null, task, [], null);
         }
 
         if (task.Manifest == null)
@@ -1123,7 +1147,7 @@ public class BuildProcessor
         }
 
         var dpOutput = new DirectoryInfo(Path.Combine(outputDir.FullName, task.InternalName));
-        string? version = null;
+        LegacyPluginManifest? legacyManifest = null;
 
         if (dpOutput.Exists)
         {
@@ -1148,19 +1172,20 @@ public class BuildProcessor
                     throw new Exception("Generated manifest didn't exist");
 
                 var manifestText = await manifestFile.OpenText().ReadToEndAsync();
-                var manifest = JsonConvert.DeserializeObject<LegacyPluginManifest>(manifestText);
+                legacyManifest = JsonConvert.DeserializeObject<LegacyPluginManifest>(manifestText);
 
-                if (manifest == null)
+                if (legacyManifest == null)
                     throw new Exception("Generated manifest was null");
 
-                if (manifest.InternalName != task.InternalName)
+                if (legacyManifest.InternalName != task.InternalName)
                     throw new Exception("Internal name in generated manifest JSON differs from DIP17 folder name.");
 
-                version = manifest.AssemblyVersion ?? throw new Exception("AssemblyVersion in generated manifest was null");
+                if (legacyManifest.AssemblyVersion == null)
+                    throw new Exception("Generated manifest did not contain an assembly version.");
                 
                 // TODO: Get this from an API or something
-                if (manifest.DalamudApiLevel != PlogonSystemDefine.API_LEVEL)
-                    throw new ApiLevelException(manifest.DalamudApiLevel ?? -1, PlogonSystemDefine.API_LEVEL);
+                if (legacyManifest.DalamudApiLevel != PlogonSystemDefine.API_LEVEL)
+                    throw new ApiLevelException(legacyManifest.DalamudApiLevel ?? -1, PlogonSystemDefine.API_LEVEL);
             }
             catch (Exception ex)
             {
@@ -1177,7 +1202,7 @@ public class BuildProcessor
                         task.Channel,
                         task.InternalName,
                         task.Manifest.Plugin.Commit,
-                        version ?? throw new Exception("Committing, but version is null"),
+                        legacyManifest!.AssemblyVersion!,
                         task.Manifest.Plugin.MinimumVersion,
                         changelog,
                         reviewer ?? throw new Exception("Committing, but reviewer is null"),
@@ -1229,7 +1254,7 @@ public class BuildProcessor
                                     new Tag
                                     {
                                         Key = "dev.dalamud.plugin/Version",
-                                        Value = version
+                                        Value = legacyManifest.AssemblyVersion!
                                     },
                                     new Tag
                                     {
@@ -1304,7 +1329,7 @@ public class BuildProcessor
             Log.Error(ex, "Could not cleanup workspace");
         }
         
-        return new BuildResult(exitCode == 0, diff, version, task, allNeeds);
+        return new BuildResult(exitCode == 0, diff, task, allNeeds, legacyManifest);
     }
 
     private BuildResult.ReviewedNeed GetNeedStatus(string key, string version, State.Need.NeedType type)
