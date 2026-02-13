@@ -235,7 +235,7 @@ class Program
                 githubSummary += "### Build Results\n";
 
                 var buildsMd = MarkdownTableBuilder.Create(" ", "Name", "Commit", "Status");
-                var previews = new List<(BuildTask Task, string Changelog, string ChangelogSource, string Description)>();
+                var previews = new List<(BuildTask Task, string Changelog, string ChangelogSource, string Punchline, string Description)>();
                 
                 // label flags
                 var prLabels = GitHubApi.PrLabel.None;
@@ -446,7 +446,7 @@ class Program
                                 }
                             }
                             
-                            previews.Add((task, changelog, changelogSource, buildResult.LegacyManifest!.Description!));
+                            previews.Add((task, changelog, changelogSource, buildResult.LegacyManifest!.Punchline!, buildResult.LegacyManifest!.Description!));
                             
                             if (mode == ModeOfOperation.Commit)
                             {
@@ -595,14 +595,15 @@ class Program
                     if (previews.Count > 0)
                     {
                         previewText =
-                            $"\n\n<details>\n<summary>Preview (Listing & Changelog)</summary>\n\n";
+                            "\n\n<details>\n<summary>Preview (Listing & Changelog)</summary>\n\n";
                         
                         foreach (var preview in previews)
                         {
                             previewText +=
-                                $"\n\n### {preview.Task.InternalName} [{preview.Task.Channel}]\n\n" +
-                                $"**Description:** {preview.Description}\n\n" +
-                                $"**Changelog (from {preview.ChangelogSource}):**\n\n{preview.Changelog}\n\n";
+                                $"\n\n#### {preview.Task.InternalName} [{preview.Task.Channel}]\n\n" +
+                                $"**Punchline:**\n\n```\n{preview.Punchline}\n```\n\n" +
+                                $"**Description:**\n\n```\n{preview.Description}\n```\n\n" +
+                                $"**Discord/Installer Changelog (from {preview.ChangelogSource}):**\n\n```\n{preview.Changelog}\n```\n\n";
                         }
                         
                         previewText += "</details>\n\n";
