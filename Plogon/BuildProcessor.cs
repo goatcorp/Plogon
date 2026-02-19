@@ -1348,18 +1348,16 @@ public class BuildProcessor
             string? diffUrl = null;
             if (type == State.Need.NeedType.Submodule && lastReview != null)
             {
-                if (Uri.TryCreate(key, UriKind.Absolute, out var uri) && uri.Host == "github.com")
+                var host = new Uri(key);
+                var url = host.AbsoluteUri.Replace(".git", string.Empty);
+                switch (host.Host)
                 {
-                    var parts = uri.AbsolutePath.Split('/');
-                    if (parts.Length >= 3)
-                    {
-                        var diffHost = uri.Host;
-                        if (diffHost.EndsWith(".git"))
-                            diffHost = diffHost[..^4];
-                        
-                        diffUrl =
-                            $"https://{diffHost}/{parts[1]}/{parts[2]}/compare/{lastReview.Version}...{version}";
-                    }
+                    case "github.com":
+                        diffUrl = $"{url}/compare/{lastReview.Version}..{version}";
+                        break;
+                    case "gitlab.com":
+                        diffUrl = $"{url}/-/compare/{haveCommit}...{wantCommit}";
+                        break;
                 }
             }
             
