@@ -1151,6 +1151,14 @@ public class BuildProcessor
 
         if (dpOutput.Exists)
         {
+            // Generate sha256sum hashes
+            var latestZip = dpOutput.EnumerateFiles("latest.zip").First();
+            var hashes = await HashingUtils.GenerateAsync(latestZip);
+            using (var shaSums = new StreamWriter(File.OpenWrite(Path.Combine(dpOutput.FullName, "hashes.txt"))))
+            {
+                await SumsHelper.WriteAsync(shaSums, hashes);
+            }
+
             var artifact = this.setup.ArtifactDirectory.CreateSubdirectory($"{task.InternalName}-{task.Manifest.Plugin.Commit}");
             try
             {
