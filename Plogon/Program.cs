@@ -285,7 +285,7 @@ class Program
                         var relevantCommitHashForWebServices = task.Manifest.Plugin.Commit;
 
                         var manifestOwners = task.Manifest.Plugin.AllContributors.Union(PlogonSystemDefine.PacMembers);
-                        var isManifestOwner = manifestOwners.Any(x => x == githubActor);
+                        var isManifestOwner = manifestOwners.Any(x => x.Equals(githubActor, StringComparison.CurrentCultureIgnoreCase));
 
                         // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
                         if (task.Type == BuildTask.TaskType.Remove)
