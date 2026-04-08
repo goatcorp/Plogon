@@ -1130,7 +1130,7 @@ public class BuildProcessor
         var imagesSourcePath = Path.Combine(task.Manifest.File.Directory.FullName, "images");
         if (exitCode == 0 && !commit && File.Exists(Path.Combine(imagesSourcePath, "icon.png")) == false)
         {
-            throw new MissingIconException();
+            throw new MissingIconException("Missing file images/icon.png, an icon is required.");
         } else
         {
             var imagePath = Path.Combine(imagesSourcePath, "icon.png");
@@ -1140,25 +1140,25 @@ public class BuildProcessor
                 using var image = Image.Load(imagePath);
                 if (image.Metadata.DecodedImageFormat != SixLabors.ImageSharp.Formats.Png.PngFormat.Instance)
                 {
-                    throw new InvalidIconException("Icon is not a valid PNG file.", null);
+                    throw new MissingIconException("Icon is not a valid PNG file.");
                 }
                 if (image.Width != image.Height)
                 {
-                    throw new InvalidIconException("Icon must have square dimensions.", null);
+                    throw new MissingIconException("Icon must have square dimensions.");
                 }
                 if (image.Width > 512)
                 {
-                    throw new InvalidIconException("Icon dimensions must not exceed 512x512 and must be square.", null);
+                    throw new MissingIconException("Icon dimensions must not exceed 512x512 and must be square.");
                 }
                 if (image.Width < 64)
                 {
-                    throw new InvalidIconException("Icon dimensions must be at least 64x64 and must be square.", null);
+                    throw new MissingIconException("Icon dimensions must be at least 64x64 and must be square.");
                 }
                 
             } catch (Exception ex)
             {
                 Log.Error(ex, "Icon validation failed");
-                throw new InvalidIconException("Icon validation failed", ex);
+                throw new MissingIconException("Icon validation failed", ex);
             }
         }
 
@@ -1482,22 +1482,8 @@ public class BuildProcessor
         /// <summary>
         /// ctor
         /// </summary>
-        public MissingIconException()
-            : base("Missing file images/icon.png, an icon is required.")
-        {
-        }
-    }
-
-    /// <summary>
-    /// Exception if icon is invalid (not a PNG or not square)
-    /// </summary>
-    public class InvalidIconException : Exception
-    {
-        /// <summary>
-        /// ctor
-        /// </summary>
-        public InvalidIconException(string message, Exception? innerException)
-            : base("Invalid icon.", innerException)
+        public MissingIconException(string message, Exception? innerException = null)
+            : base(message, innerException)
         {
         }
     }

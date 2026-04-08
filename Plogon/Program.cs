@@ -487,23 +487,14 @@ class Program
                         aborted = true;
                         numFailed++;
                     }
-                    catch (BuildProcessor.MissingIconException)
+                    catch (BuildProcessor.MissingIconException ex)
                     {
-                        Log.Error("Missing icon!");
+                        Log.Error(ex, "Missing or invalid icon!");
                         buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                            "Missing icon in images/ build output!");
+                            $"Missing or invalid icon in images/ build output! {ex.Message}");
                         numFailed++;
                         numNoIcon++;
 
-                        prLabels |= GitHubApi.PrLabel.NeedIcon;
-                    }
-                    catch (BuildProcessor.InvalidIconException ex)
-                    {
-                        Log.Error(ex, "Invalid icon!");
-                        buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                            $"Invalid icon in images/ build output! {ex.Message}");
-                        numFailed++;
-                        numNoIcon++;
                         prLabels |= GitHubApi.PrLabel.NeedIcon;
                     }
                     catch (BuildProcessor.ApiLevelException api)
