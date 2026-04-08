@@ -1142,18 +1142,19 @@ public class BuildProcessor
                 {
                     throw new InvalidIconException("Icon is not a valid PNG file.", null);
                 }
-                if (image.Width > 512 || image.Height > 512)
-                {
-                    throw new InvalidIconException("Icon dimensions must not exceed 512x512.", null);
-                }
-                if (image.Width < 64 || image.Height < 64)
-                {
-                    throw new InvalidIconException("Icon dimensions must be at least 64x64.", null);
-                }
                 if (image.Width != image.Height)
                 {
                     throw new InvalidIconException("Icon must have square dimensions.", null);
                 }
+                if (image.Width > 512)
+                {
+                    throw new InvalidIconException("Icon dimensions must not exceed 512x512 and must be square.", null);
+                }
+                if (image.Width < 64)
+                {
+                    throw new InvalidIconException("Icon dimensions must be at least 64x64 and must be square.", null);
+                }
+                
             } catch (Exception ex)
             {
                 Log.Error(ex, "Icon validation failed");
