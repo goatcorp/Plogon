@@ -1133,7 +1133,7 @@ public class BuildProcessor
             throw new MissingIconException();
         } else
         {
-            var imagePath = Path.Combine(Path.Combine(imagesSourcePath, "icon.png"));
+            var imagePath = Path.Combine(imagesSourcePath, "icon.png");
             // open the image and check if it's a valid PNG and has square dimensions
             try
             {
@@ -1141,6 +1141,14 @@ public class BuildProcessor
                 if (image.Metadata.DecodedImageFormat != SixLabors.ImageSharp.Formats.Png.PngFormat.Instance)
                 {
                     throw new InvalidIconException("Icon is not a valid PNG file.", null);
+                }
+                if (image.Width > 512 || image.Height > 512)
+                {
+                    throw new InvalidIconException("Icon dimensions must not exceed 512x512.", null);
+                }
+                if (image.Width < 64 || image.Height < 64)
+                {
+                    throw new InvalidIconException("Icon dimensions must be at least 64x64.", null);
                 }
                 if (image.Width != image.Height)
                 {
