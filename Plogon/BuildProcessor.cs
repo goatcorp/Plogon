@@ -1483,7 +1483,7 @@ public class BuildProcessor
         /// ctor
         /// </summary>
         public MissingIconException()
-            : base("Missing icon.")
+            : base("Missing file images/icon.png, an icon is required.")
         {
         }
     }
