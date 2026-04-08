@@ -29,6 +29,8 @@ using Plogon.Repo;
 
 using Serilog;
 
+using SixLabors.ImageSharp;
+
 using Tag = Amazon.S3.Model.Tag;
 
 namespace Plogon;
@@ -1129,6 +1131,26 @@ public class BuildProcessor
         if (exitCode == 0 && !commit && File.Exists(Path.Combine(imagesSourcePath, "icon.png")) == false)
         {
             throw new MissingIconException();
+        } else
+        {
+            var imagePath = Path.Combine(Path.Combine(imagesSourcePath, "icon.png"));
+            // open the image and check if it's a valid PNG and has square dimensions
+            try
+            {
+                using var image = Image.Load(imagePath);
+                if (image.Metadata.DecodedImageFormat != SixLabors.ImageSharp.Formats.Png.PngFormat.Instance)
+                {
+                    throw new InvalidIconException("Icon is not a valid PNG file.", null);
+                }
+                if (image.Width != image.Height)
+                {
+                    throw new InvalidIconException("Icon must have square dimensions.", null);
+                }
+            } catch (Exception ex)
+            {
+                Log.Error(ex, "Icon validation failed");
+                throw new InvalidIconException("Icon validation failed", ex);
+            }
         }
 
         await this.dockerClient.Containers.RemoveContainerAsync(containerCreateResponse.ID,
@@ -1453,6 +1475,20 @@ public class BuildProcessor
         /// </summary>
         public MissingIconException()
             : base("Missing icon.")
+        {
+        }
+    }
+
+    /// <summary>
+    /// Exception if icon is invalid (not a PNG or not square)
+    /// </summary>
+    public class InvalidIconException : Exception
+    {
+        /// <summary>
+        /// ctor
+        /// </summary>
+        public InvalidIconException(string message, Exception? innerException)
+            : base("Invalid icon.", innerException)
         {
         }
     }

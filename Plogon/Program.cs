@@ -497,6 +497,15 @@ class Program
 
                         prLabels |= GitHubApi.PrLabel.NeedIcon;
                     }
+                    catch (BuildProcessor.InvalidIconException ex)
+                    {
+                        Log.Error(ex, "Invalid icon!");
+                        buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
+                            $"Invalid icon in images/ build output! {ex.Message}");
+                        numFailed++;
+                        numNoIcon++;
+                        prLabels |= GitHubApi.PrLabel.NeedIcon;
+                    }
                     catch (BuildProcessor.ApiLevelException api)
                     {
                         Log.Error("Bad API level!");
