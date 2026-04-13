@@ -551,7 +551,7 @@ class Program
                         $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
-                    commentText += "\n\n**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it!\n\n";
+                    commentText += "\n\n**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it! By submitting a plugin, you agree to our [AI Usage Policy](https://github.com/goatcorp/governance/blob/main/ai-policy-official-repo.md).\n\n";
 
                     if (!anyTried)
                         commentText =
