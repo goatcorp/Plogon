@@ -29,6 +29,8 @@ using Plogon.Repo;
 
 using Serilog;
 
+using SixLabors.ImageSharp;
+
 using Tag = Amazon.S3.Model.Tag;
 
 namespace Plogon;
@@ -1128,7 +1130,36 @@ public class BuildProcessor
         var imagesSourcePath = Path.Combine(task.Manifest.File.Directory.FullName, "images");
         if (exitCode == 0 && !commit && File.Exists(Path.Combine(imagesSourcePath, "icon.png")) == false)
         {
-            throw new MissingIconException();
+            throw new MissingIconException("Missing file images/icon.png, an icon is required.");
+        } else
+        {
+            var imagePath = Path.Combine(imagesSourcePath, "icon.png");
+            // open the image and check if it's a valid PNG and has square dimensions
+            try
+            {
+                using var image = Image.Load(imagePath);
+                if (image.Metadata.DecodedImageFormat != SixLabors.ImageSharp.Formats.Png.PngFormat.Instance)
+                {
+                    throw new MissingIconException("Icon is not a valid PNG file.");
+                }
+                if (image.Width != image.Height)
+                {
+                    throw new MissingIconException("Icon must have square dimensions.");
+                }
+                if (image.Width > 512)
+                {
+                    throw new MissingIconException("Icon dimensions must not exceed 512x512 and must be square.");
+                }
+                if (image.Width < 64)
+                {
+                    throw new MissingIconException("Icon dimensions must be at least 64x64 and must be square.");
+                }
+                
+            } catch (Exception ex)
+            {
+                Log.Error(ex, "Icon validation failed");
+                throw new MissingIconException("Icon validation failed", ex);
+            }
         }
 
         await this.dockerClient.Containers.RemoveContainerAsync(containerCreateResponse.ID,
@@ -1451,8 +1482,8 @@ public class BuildProcessor
         /// <summary>
         /// ctor
         /// </summary>
-        public MissingIconException()
-            : base("Missing icon.")
+        public MissingIconException(string message, Exception? innerException = null)
+            : base(message, innerException)
         {
         }
     }

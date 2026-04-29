@@ -285,7 +285,7 @@ class Program
                         var relevantCommitHashForWebServices = task.Manifest.Plugin.Commit;
 
                         var manifestOwners = task.Manifest.Plugin.AllContributors.Union(PlogonSystemDefine.PacMembers);
-                        var isManifestOwner = manifestOwners.Any(x => x == githubActor);
+                        var isManifestOwner = manifestOwners.Any(x => x.Equals(githubActor, StringComparison.CurrentCultureIgnoreCase));
 
                         // Removals do not have a manifest, so we need to use the have commit (as that is what we are removing)
                         if (task.Type == BuildTask.TaskType.Remove)
@@ -487,11 +487,11 @@ class Program
                         aborted = true;
                         numFailed++;
                     }
-                    catch (BuildProcessor.MissingIconException)
+                    catch (BuildProcessor.MissingIconException ex)
                     {
-                        Log.Error("Missing icon!");
+                        Log.Error(ex, "Missing or invalid icon!");
                         buildsMd.AddRow("🖼️", $"{task.InternalName} [{task.Channel}]", fancyCommit,
-                            "Missing icon in images/ build output!");
+                            $"Missing or invalid icon in images/ build output! {ex.Message}");
                         numFailed++;
                         numNoIcon++;
 
@@ -551,7 +551,7 @@ class Program
                         $"[Show log](https://github.com/goatcorp/DalamudPluginsD17/actions/runs/{actionRunId}) - [Review](https://github.com/goatcorp/DalamudPluginsD17/pull/{prNumber}/files#submit-review)";
 
                     var commentText = anyFailed ? "Builds failed, please check action output." : "All builds OK!";
-                    commentText += "\n\n**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it!\n\n";
+                    commentText += "\n\n**Take care!** Please test your plugins in-game before submitting them here to prevent crashes and instability. We really appreciate it! By submitting a plugin, you agree to our [AI Usage Policy](https://github.com/goatcorp/governance/blob/main/ai-policy-official-repo.md).\n\n";
 
                     if (!anyTried)
                         commentText =
