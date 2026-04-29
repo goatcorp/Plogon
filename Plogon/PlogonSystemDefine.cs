@@ -8,7 +8,7 @@ public static class PlogonSystemDefine
     /// <summary>
     /// Current API level.
     /// </summary>
-    public const int API_LEVEL = 14;
+    public const int API_LEVEL = 15;
 
     /// <summary>
     /// PAC members, github logins.
