@@ -1142,6 +1142,7 @@ public class BuildProcessor
                 {
                     throw new MissingIconException("Icon is not a valid PNG file.");
                 }
+                Log.Information("Icon dimensions: {Width}x{Height}", image.Width, image.Height);
                 if (image.Width != image.Height)
                 {
                     throw new MissingIconException("Icon must have square dimensions.");
@@ -1158,7 +1159,7 @@ public class BuildProcessor
             } catch (Exception ex)
             {
                 Log.Error(ex, "Icon validation failed");
-                throw new MissingIconException("Icon validation failed", ex);
+                throw new MissingIconException($"Icon validation failed: {ex.Message}", ex);
             }
         }
 
