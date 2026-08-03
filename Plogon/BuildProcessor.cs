@@ -919,6 +919,11 @@ public class BuildProcessor
             if (!commit)
                 throw new Exception("Can't remove plugins if not committing");
 
+            if (task.Channel == "stable")
+            {
+                throw new Exception("Refusing to remove stable plugin");
+            }
+
             this.pluginRepository.RemovePlugin(task.Channel, task.InternalName);
 
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
@@ -958,7 +963,7 @@ public class BuildProcessor
 
         if (task.Manifest.Plugin.ProjectPath.Contains(".."))
             throw new Exception("Not allowed");
-        
+
         // Always clone fresh
         if (workDir.Exists)
         {
