@@ -70,6 +70,9 @@ public class BuildProcessor
             ".NETStandard,Version=v2.0", ["2.0.0"]
         },
         { 
+            ".NETStandard,Version=v2.1", ["2.1.0"]
+        },
+        { 
             "net5.0", ["5.0.0"]
         },
         { 
