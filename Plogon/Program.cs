@@ -337,7 +337,7 @@ class Program
                             GitHubOutputBuilder.StartGroup($"Remove {task.InternalName}");
                             Log.Information("Remove: {Name} - {Channel}", task.InternalName, task.Channel);
 
-                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, reviewer, committingAuthor, tasks);
+                            var removeStatus = await buildProcessor.ProcessTask(task, true, null, reviewer, committingAuthor, tasks, buildsMd);
                             allResults.Add(removeStatus);
 
                             if (removeStatus.Success)
@@ -376,7 +376,8 @@ class Program
 
                         numTried++;
 
-                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, committingAuthor, tasks);
+                        var buildResult = await buildProcessor.ProcessTask(task, mode == ModeOfOperation.Commit, changelog, reviewer, committingAuthor, tasks, buildsMd);
+                        buildsMd = buildResult.BuildsMd;
                         allResults.Add(buildResult);
 
                         var mainDiffUrl = buildResult.Diff?.HosterUrl ?? buildResult.Diff?.RegularDiffLink;

@@ -734,7 +734,8 @@ public class BuildProcessor
         /// <param name="task">processed task</param>
         /// <param name="needs">List of needs</param>
         /// <param name="legacyManifest">Legacy manifest</param>
-        public BuildResult(bool success, PluginDiffSet? diff, BuildTask task, IEnumerable<ReviewedNeed> needs, LegacyPluginManifest? legacyManifest)
+        /// <param name="buildsMd">Markdown table builder for builds</param>
+        public BuildResult(bool success, PluginDiffSet? diff, BuildTask task, IEnumerable<ReviewedNeed> needs, LegacyPluginManifest? legacyManifest, MarkdownTableBuilder? buildsMd)
         {
             this.Success = success;
             this.Diff = diff;
@@ -742,6 +743,7 @@ public class BuildProcessor
             this.Task = task;
             this.Needs = needs;
             this.LegacyManifest = legacyManifest;
+            this.BuildsMd = buildsMd;
         }
 
         /// <summary>
@@ -784,6 +786,11 @@ public class BuildProcessor
         /// Legacy manifest.
         /// </summary>
         public LegacyPluginManifest? LegacyManifest { get; set; }
+
+        /// <summary>
+        /// Markdown table builder for builds, passed in from the caller.
+        /// </summary>
+        public MarkdownTableBuilder? BuildsMd { get; set; }
     }
 
     private class NeedComparer : IEqualityComparer<BuildResult.ReviewedNeed>
@@ -906,10 +913,11 @@ public class BuildProcessor
     /// <param name="reviewer">Reviewer of this task</param>
     /// <param name="submitter">Submitter of this task</param>
     /// <param name="otherTasks">All other queued tasks</param>
+    /// <param name="buildsMd">Markdown table builder for builds</param>
     /// <returns>The result of the build</returns>
     /// <exception cref="Exception">Generic build system errors</exception>
     /// <exception cref="PluginCommitException">Error during repo commit, all no further work should be done</exception>
-    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, string? submitter, ISet<BuildTask> otherTasks)
+    public async Task<BuildResult> ProcessTask(BuildTask task, bool commit, string? changelog, string? reviewer, string? submitter, ISet<BuildTask> otherTasks, MarkdownTableBuilder? buildsMd)
     {
         if (commit && string.IsNullOrWhiteSpace(reviewer))
             throw new Exception("Reviewer must be set when committing");
@@ -924,7 +932,7 @@ public class BuildProcessor
             var repoOutputDir = this.pluginRepository.GetPluginOutputDirectory(task.Channel, task.InternalName);
             repoOutputDir.Delete(true);
 
-            return new BuildResult(true, null, task, [], null);
+            return new BuildResult(true, null, task, [], null, buildsMd);
         }
 
         if (task.Manifest == null)
@@ -1203,6 +1211,18 @@ public class BuildProcessor
                 {
                     file.CopyTo(Path.Combine(artifact.FullName, file.Name), true);
                 }
+                var folderSize = dpOutput.EnumerateFiles("*", SearchOption.AllDirectories).Sum(x => x.Length);
+                if (folderSize > 100 * 1024 * 1024)
+                {
+                    throw new Exception($"Artifact size is too large: {folderSize / (1024 * 1024)} MB. Limit is 100 MB.");
+                }
+                else if (folderSize > 50 * 1024 * 1024)
+                {
+                    var fancyCommit = task.Manifest.Plugin.Commit.Length > 7
+                                          ? task.Manifest.Plugin.Commit[..7]
+                                          : task.Manifest.Plugin.Commit;
+                    buildsMd?.AddRow("⚠️", $"{task.InternalName} [{task.Channel}]", fancyCommit, $"Warning: Artifact size is large, {folderSize / (1024 * 1024)} MB / 100 MB");
+                }
             }
             catch (Exception ex)
             {
@@ -1380,7 +1400,7 @@ public class BuildProcessor
             Log.Error(ex, "Could not cleanup workspace");
         }
         
-        return new BuildResult(exitCode == 0, diff, task, allNeeds, legacyManifest);
+        return new BuildResult(exitCode == 0, diff, task, allNeeds, legacyManifest, buildsMd);
     }
 
     private BuildResult.ReviewedNeed GetNeedStatus(string key, string version, State.Need.NeedType type)
