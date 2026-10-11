@@ -98,7 +98,12 @@ public class ManifestStorage
         {
             try
             {
-                var tomlFile = manifestDir.GetFiles("*.toml").First();
+                var tomlFile = manifestDir.GetFiles("*.toml").FirstOrDefault();
+                if (tomlFile == null)
+                {
+                    Log.Information("Skipping directory {manifestDir} as it has no .toml files.", manifestDir);
+                    continue;
+                }
 
                 if (cutoffDate != null)
                 {
